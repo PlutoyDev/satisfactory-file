@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "es2016" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
+    "module": "ESNext",
+    "moduleResolution": "Bundler" /* Specify how TypeScript looks up a file from a given module specifier. */,
+    "noEmit": true /* Disable emitting files from a compilation. */,
+    "esModuleInterop": true /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables 'allowSyntheticDefaultImports' for type compatibility. */,
+    "forceConsistentCasingInFileNames": true /* Ensure that casing is correct in imports. */,
+    "noUncheckedIndexedAccess": true /* Add 'undefined' to a type when accessed using an index. */,
+    "skipLibCheck": true /* Skip type checking all .d.ts files. */,
+    "checkJs": true /* Enable error reporting in type-checked JavaScript files. */
+  }
+}
