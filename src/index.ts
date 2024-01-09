@@ -1,3 +1,4 @@
+import { unzlibSync } from 'fflate';
 import SequentialReader from './lib/SequentialReader';
 import * as ur from './lib/UnrealTypeReaders';
 
@@ -60,5 +61,41 @@ export class SatisfactorySaveReader {
       saveDataHash,
       isCreativeModeEnabled,
     };
+  }
+
+  static inflateChunks(reader: SequentialReader) {
+    let totalSize = 0;
+    let count = 0;
+    const inflatedChunks: Uint8Array[] = [];
+    const inflatedChunkSizes: number[] = [];
+    while (reader.offset < reader.dataView.byteLength) {
+      const magicNumber = reader.readUint();
+      if (magicNumber !== 0x9e2a83c1) {
+        throw new Error(`Invalid magic number: ${magicNumber.toString(16)}`);
+      }
+      const version = reader.readUint();
+      if (version !== 0x22222222) {
+        throw new Error(`Invalid version: ${version.toString(16)}`);
+      }
+
+      // max chunk size (8) + compressor num (1) + compress size summary (8) + uncompress size summary (8) = 25
+      reader.skip(25);
+      const compressedSize = Number(reader.readInt64());
+      const inflatedSize = Number(reader.readInt64());
+      const inflatedData = new Uint8Array(inflatedSize);
+      unzlibSync(new Uint8Array(reader.slice(compressedSize)), { out: inflatedData });
+      inflatedChunkSizes.push(inflatedSize);
+      inflatedChunks.push(inflatedData);
+      totalSize += inflatedSize;
+      count++;
+    }
+
+    const inflatedData = new Uint8Array(totalSize);
+    let offset = 0;
+    for (let i = 0; i < count; i++) {
+      inflatedData.set(inflatedChunks[i], offset);
+      offset += inflatedChunkSizes[i];
+    }
+    return inflatedData;
   }
 }
