@@ -81,7 +81,7 @@ export function readFGuid(reader: SequentialReader) {
 
 export interface FMD5Hash {
   IsValid: boolean;
-  hash: Uint8Array;
+  hash: ArrayBuffer;
 }
 
 export function readFMD5Hash(reader: SequentialReader) {
