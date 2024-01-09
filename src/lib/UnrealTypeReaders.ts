@@ -79,10 +79,15 @@ export function readFGuid(reader: SequentialReader) {
   return { a, b, c, d };
 }
 
+export interface FMD5Hash {
+  IsValid: boolean;
+  hash: Uint8Array;
+}
+
 export function readFMD5Hash(reader: SequentialReader) {
-  const bIsValid = reader.readInt() !== 0;
+  const IsValid = reader.readInt() !== 0;
   const hash = reader.slice(16);
-  return { bIsValid, hash };
+  return { IsValid, hash };
 }
 
 export function readFText(reader: SequentialReader) {
