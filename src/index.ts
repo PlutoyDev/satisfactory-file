@@ -2,30 +2,37 @@ import { unzlibSync } from 'fflate';
 import SequentialReader from './lib/SequentialReader';
 import * as ur from './lib/UnrealTypeReaders';
 
-interface SatisfactorySaveHeader {
-  saveHeaderVersion: number;
-  saveVersion: number;
-  buildVersion: number;
-  mapName: string;
-  mapOptions: string;
-  sessionName: string;
-  playDurationSeconds: number;
-  saveDateTime: Date;
-  sessionVisibility: number;
-  editorObjectVersion: number;
-  modMetadata: string;
-  isModdedSave: boolean;
-  saveIdentifier: string;
-  isPartitionedWorld: boolean;
-  saveDataHash: ur.FMD5Hash;
-  isCreativeModeEnabled: boolean;
+export namespace SatisfactorySave {
+  export interface Header {
+    saveHeaderVersion: number;
+    saveVersion: number;
+    buildVersion: number;
+    mapName: string;
+    mapOptions: string;
+    sessionName: string;
+    playDurationSeconds: number;
+    saveDateTime: Date;
+    sessionVisibility: number;
+    editorObjectVersion: number;
+    modMetadata: string;
+    isModdedSave: boolean;
+    saveIdentifier: string;
+    isPartitionedWorld: boolean;
+    saveDataHash: ur.FMD5Hash;
+    isCreativeModeEnabled: boolean;
+  }
 }
 
 export class SatisfactorySaveReader {
   primaryReader?: SequentialReader;
   secondaryReader?: SequentialReader;
 
-  static readHeader(reader: SequentialReader) {
+  /**
+   * Reads the header of the save file from a SequentialReader
+   * @param {SequentialReader} reader
+   * @returns {SatisfactorySave.Header} The header of the save file
+   */
+  static readHeader(reader: SequentialReader): SatisfactorySave.Header {
     const saveHeaderVersion = reader.readInt();
     const saveVersion = reader.readInt();
     const buildVersion = reader.readInt();
@@ -63,6 +70,11 @@ export class SatisfactorySaveReader {
     };
   }
 
+  /**
+   * Inflate the all the chunks of the save file sequentially
+   * @param {SequentialReader} reader The reader to read the chunks from
+   * @returns {Uint8Array} The inflated data
+   */
   static inflateChunks(reader: SequentialReader) {
     let totalSize = 0;
     let count = 0;
@@ -97,5 +109,58 @@ export class SatisfactorySaveReader {
       offset += inflatedChunkSizes[i];
     }
     return inflatedData;
+  }
+
+  /**
+   * Generator function to read a save file from a file object.
+   * Yields:
+   *  - Header
+   * @param {File} file The file to read from
+   */
+  static async *readFromFile(file: File) {
+    const stream = file.stream();
+    const fileReader = stream.getReader();
+    let fullChunk: Uint8Array | undefined = undefined;
+    let chunkSize = 0;
+    let headerRead = false;
+    let headerSize = 0;
+    while (true) {
+      const { done, value } = await fileReader.read();
+      if (done) {
+        if (headerRead) {
+          break;
+        }
+        throw new Error('Unexpected end of file');
+      }
+
+      chunkSize += value.byteLength;
+      if (fullChunk === undefined) {
+        fullChunk = value;
+      } else {
+        const newChunk = new Uint8Array(chunkSize);
+        newChunk.set(fullChunk);
+        newChunk.set(value, fullChunk.byteLength);
+        fullChunk = newChunk;
+      }
+
+      try {
+        if (!headerRead) {
+          const seqReader = new SequentialReader(value);
+          const header = SatisfactorySaveReader.readHeader(seqReader);
+          headerSize = seqReader.offset;
+          headerRead = true;
+          yield header;
+        }
+        // Else do nothing, we already read the header, the while loop will be use to read the rest of the file
+      } catch (e) {
+        // Check if its RangeError, if so, we need to read more data
+        if (!(e instanceof RangeError)) {
+          throw e;
+        }
+      }
+    }
+
+    const remainingData = fullChunk.slice(headerSize);
+    const inflatedData = SatisfactorySaveReader.inflateChunks(new SequentialReader(remainingData));
   }
 }
