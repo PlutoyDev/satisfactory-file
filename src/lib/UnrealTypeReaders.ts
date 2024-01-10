@@ -147,7 +147,7 @@ export function inflateChunks(reader: SequentialReader) {
   }
 }
 
-interface FPropertyTag {
+export interface FPropertyTag {
   name: string; // Name/Key of property
   type: string; // Type of property (Removed "Property" suffix)
   size: number; // Property size (default is 0)
