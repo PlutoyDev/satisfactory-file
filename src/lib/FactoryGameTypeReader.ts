@@ -124,3 +124,121 @@ export function readFGObjectSaveHeader(reader: SequentialReader): FObjectSaveHea
 
   throw new Error(`Invalid type ${type}`);
 }
+
+const readerMap = {
+  Int8: (r) => r.readInt8(),
+  Int: (r) => r.readInt(),
+  Int64: (r) => r.readInt64(),
+  UInt32: (r) => r.readUint(),
+  Float: (r) => r.readFloat(),
+  Double: (r) => r.readDouble(),
+  Enum: ur.readFString,
+  Str: ur.readFString,
+  Name: ur.readFString,
+  Text: ur.readFText,
+  Object: readObjectReference,
+  Interface: readObjectReference,
+  // biome-ignore lint/suspicious/noExplicitAny: doesn't matter
+} satisfies Record<string, (r: SequentialReader) => any>;
+
+export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
+  const valueType = tag.valueType ?? tag.innerType ?? tag.type; // valueType for Map, innerType is only for Array, Set
+  // biome-ignore lint/suspicious/noExplicitAny: doesn't matter
+  let typeReader: ((r: SequentialReader) => any) | undefined = undefined;
+  if (Object.keys(readerMap).includes(valueType)) {
+    typeReader = readerMap[valueType as keyof typeof readerMap];
+  } else if (valueType === 'Byte') {
+    // Not sure why the type is Byte but the value is stored as String
+    typeReader = !tag.enumName || tag.enumName === 'None' ? readerMap.Int8 : ur.readFString;
+  } else if (valueType === 'Struct') {
+    let innerTag: ur.FPropertyTag | undefined = undefined;
+    let structName: string | undefined = tag.structName;
+    if (tag.type === 'Array' || tag.type === 'Set') {
+      // biome-ignore lint/style/noNonNullAssertion: Will have inner tag for Array and Set, for StructName
+      innerTag = ur.readFPropertyTag(reader)!;
+      if (innerTag.type !== 'Struct') {
+        throw new Error(`Expected Struct but got ${innerTag.type}`);
+      }
+      structName = innerTag.structName;
+    } else if (tag.type === 'Map') {
+      // Special case for MapProperty, struct in map doesn't have structName
+      // Instead, it store it as TLVs that can be read using readProperties
+      // Except 2 case: where tag.name are mSaveData, mUnresolvedSaveData
+      // Both use FIntVector as key but doesn't have field names
+      if ((tag.name === 'mSaveData' || tag.name === 'mUnresolvedSaveData') && !tag.valueType) {
+        // If tag.valueType is undefined, the valueType the Key
+        structName = 'IntVector';
+      }
+    }
+    // @ts-ignore
+    typeReader = (structName && StructReaders[`read${structName}`]) || readFProperties;
+  }
+
+  if (!typeReader) {
+    console.log('Unknown property type', tag);
+    throw new Error('Unknown property type');
+  }
+
+  if (tag.type === 'Map' && tag.valueType) {
+    // delete tag.valueType;
+    const keyReader = getTypeReader(reader, tag);
+    // tag.valueType = valueType;
+    return (r: SequentialReader) => {
+      const key = keyReader(r);
+      const value = typeReader?.(r);
+      return { key, value };
+    };
+  }
+
+  return typeReader;
+}
+
+export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | null | undefined = undefined) {
+  const localTag = tag === undefined ? ur.readFPropertyTag(reader) : tag;
+  if (localTag === null) {
+    return null;
+  }
+
+  if (localTag.type === 'Bool') {
+    return localTag.boolValue as boolean;
+  }
+
+  let count: number | undefined = undefined;
+  if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+    if (localTag.type === 'Set' || localTag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
+    count = reader.readInt();
+  }
+
+  const valueReader = getTypeReader(reader, localTag);
+
+  if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+    const values: unknown[] = [];
+    // biome-ignore lint/style/noNonNullAssertion: <explanation>
+    for (let i = 0; i < count!; i++) {
+      values.push(valueReader(reader));
+    }
+    return values;
+  }
+  return valueReader(reader);
+}
+
+export function readFProperties(reader: SequentialReader) {
+  const properties: Record<string, unknown> = {};
+  while (true) {
+    try {
+      const prop = readFProperty(reader);
+      if (prop === null) {
+        break;
+      }
+      const [tag, value] = prop;
+      properties[tag.name] = value;
+    } catch (e) {
+      console.error('Error parsing property', {
+        offset: reader.offset.toString(16),
+        error: e,
+      });
+      throw e;
+    }
+  }
+  return properties;
+}
