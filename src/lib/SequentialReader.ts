@@ -11,6 +11,18 @@ export class SequentialReader {
     this.littleEndian = options?.littleEndian ?? false;
   }
 
+  get length(): number {
+    return this.dataView.byteLength;
+  }
+
+  get remaining(): number {
+    return this.dataView.byteLength - this.offset;
+  }
+
+  get isEOF(): boolean {
+    return this.offset >= this.dataView.byteLength;
+  }
+
   readInt8(): number {
     const value = this.dataView.getInt8(this.offset);
     this.offset += 1;
