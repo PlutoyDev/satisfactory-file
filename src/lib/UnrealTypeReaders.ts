@@ -198,3 +198,42 @@ export function readFPropertyTag(reader: SequentialReader) {
 
   return tag as FPropertyTag;
 }
+
+export interface FTransform3f {
+  rotation: {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+  };
+  position: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  scale: {
+    x: number;
+    y: number;
+    z: number;
+  };
+}
+
+export function readFTransform3f(reader: SequentialReader): FTransform3f {
+  const rotation = {
+    x: reader.readFloat(),
+    y: reader.readFloat(),
+    z: reader.readFloat(),
+    w: reader.readFloat(),
+  };
+  const position = {
+    x: reader.readFloat(),
+    y: reader.readFloat(),
+    z: reader.readFloat(),
+  };
+  const scale = {
+    x: reader.readFloat(),
+    y: reader.readFloat(),
+    z: reader.readFloat(),
+  };
+  return { rotation, position, scale };
+}

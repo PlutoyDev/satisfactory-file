@@ -1,4 +1,3 @@
-import { unzlibSync } from 'fflate';
 import SequentialReader from './SequentialReader';
 import * as ur from './UnrealTypeReaders';
 
@@ -80,8 +79,48 @@ export interface ObjectReference {
   pathName: string;
 }
 
+export type DestroyedActor = ObjectReference;
+
 export function readObjectReference(reader: SequentialReader): ObjectReference {
   const levelName = ur.readFString(reader);
   const pathName = ur.readFString(reader);
   return { levelName, pathName };
+}
+
+export interface FObjectBase {
+  /** 0: Object, 1: Actor */
+  type: 0 | 1;
+  className: string;
+  reference: ObjectReference;
+}
+
+export interface FObjectSaveHeader extends FObjectBase {
+  type: 0;
+  outerPathName: string;
+}
+
+export interface FActorSaveHeader extends FObjectBase {
+  type: 1;
+  needTransform: boolean;
+  transform: ur.FTransform3f;
+  wasPlacedInLevel: boolean;
+}
+
+export function readFGObjectSaveHeader(reader: SequentialReader): FObjectSaveHeader | FActorSaveHeader {
+  const type = reader.readInt() as 0 | 1;
+  const className = ur.readFString(reader);
+  const reference = readObjectReference(reader);
+  if (type === 0) {
+    const outerPathName = ur.readFString(reader);
+    return { type, className, reference, outerPathName };
+  }
+
+  if (type === 1) {
+    const needTransform = reader.readInt() !== 0;
+    const transform = ur.readFTransform3f(reader);
+    const wasPlacedInLevel = reader.readInt() !== 0;
+    return { type, className, reference, needTransform, transform, wasPlacedInLevel };
+  }
+
+  throw new Error(`Invalid type ${type}`);
 }
