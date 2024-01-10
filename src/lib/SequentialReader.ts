@@ -16,11 +16,11 @@ export class SequentialReader {
   }
 
   get remaining(): number {
-    return this.dataView.byteLength - this.offset;
+    return this.length - this.offset;
   }
 
   get isEOF(): boolean {
-    return this.offset >= this.dataView.byteLength;
+    return this.remaining <= 0;
   }
 
   readInt8(): number {
