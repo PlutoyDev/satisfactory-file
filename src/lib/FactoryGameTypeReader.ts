@@ -143,8 +143,7 @@ const readerMap = {
 
 export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   const valueType = tag.valueType ?? tag.innerType ?? tag.type; // valueType for Map, innerType is only for Array, Set
-  // biome-ignore lint/suspicious/noExplicitAny: doesn't matter
-  let typeReader: ((r: SequentialReader) => any) | undefined = undefined;
+  let typeReader: ((r: SequentialReader) => unknown) | undefined = undefined;
   if (Object.keys(readerMap).includes(valueType)) {
     typeReader = readerMap[valueType as keyof typeof readerMap];
   } else if (valueType === 'Byte') {
@@ -180,9 +179,7 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   }
 
   if (tag.type === 'Map' && tag.valueType) {
-    // delete tag.valueType;
-    const keyReader = getTypeReader(reader, tag);
-    // tag.valueType = valueType;
+    const keyReader = getTypeReader(reader, tag) as (r: SequentialReader) => unknown;
     return (r: SequentialReader) => {
       const key = keyReader(r);
       const value = typeReader?.(r);
@@ -193,8 +190,8 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   return typeReader;
 }
 
-export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | null | undefined = undefined) {
-  const localTag = tag === undefined ? ur.readFPropertyTag(reader) : tag;
+export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | undefined = undefined) {
+  const localTag = tag ?? ur.readFPropertyTag(reader);
   if (localTag === null) {
     return null;
   }
@@ -226,11 +223,12 @@ export function readFProperties(reader: SequentialReader) {
   const properties: Record<string, unknown> = {};
   while (true) {
     try {
-      const prop = readFProperty(reader);
-      if (prop === null) {
+      const tag = ur.readFPropertyTag(reader);
+      if (tag === null) {
         break;
       }
-      const [tag, value] = prop;
+
+      const value = readFProperty(reader, tag);
       properties[tag.name] = value;
     } catch (e) {
       console.error('Error parsing property', {
@@ -241,4 +239,78 @@ export function readFProperties(reader: SequentialReader) {
     }
   }
   return properties;
+}
+
+type FGObject = (
+  | FObjectSaveHeader
+  | (FActorSaveHeader & {
+      parent: ObjectReference;
+      children: ObjectReference[];
+    })
+) & {
+  properties: Record<string, unknown>;
+  hasPropertyGuid: boolean; // (default is false)
+  propertyGuid?: ur.FGuid;
+};
+
+/**
+ * Yields:
+ * - Object count
+ * - FGObject... (Object count times)
+ * Returns: {
+ *  objects: FGObject[];
+ *  tocDestroyedActors?: DestroyedActor[];
+ * }
+ */
+export function readLevelObjectData(reader: SequentialReader) {
+  const tocBlobLength = reader.readInt64AsNumber();
+  const tocBlob = reader.slice(tocBlobLength);
+  // reader is now at the data blob.
+
+  const tocReader = new SequentialReader(tocBlob);
+  const objectCount = tocReader.readInt();
+
+  const objects: FGObject[] = [];
+  for (let i = 0; i < objectCount; i++) {
+    const object: Partial<FGObject> = readFGObjectSaveHeader(tocReader);
+    if (object.type === 1) {
+      object.parent = readObjectReference(reader);
+      object.children = ur.readTArray(reader, readObjectReference);
+    }
+    object.properties = readFProperties(reader);
+    object.hasPropertyGuid = reader.readInt() !== 0;
+    if (object.hasPropertyGuid) {
+      object.propertyGuid = ur.readFGuid(reader);
+    }
+  }
+
+  const data: {
+    objects: FGObject[];
+    tocDestroyedActors?: DestroyedActor[];
+  } = { objects };
+
+  if (!tocReader.isEOF) {
+    // Have destroyed actors in TOC
+    const destroyedActorCount = tocReader.readInt();
+    data.tocDestroyedActors = [];
+    for (let i = 0; i < destroyedActorCount; i++) {
+      data.tocDestroyedActors.push(readObjectReference(tocReader));
+    }
+  }
+
+  return data;
+}
+
+interface PerLevelStreamingLevelSaveData {
+  objects: FGObject[];
+  tocDestroyedActors?: DestroyedActor[];
+  destroyedActors?: DestroyedActor[];
+}
+
+export function readPerLevelStreamingLevelDataMap(reader: SequentialReader) {
+  return ur.readTMap(reader, ur.readFString, (reader) => {
+    const levelData = readLevelObjectData(reader) as PerLevelStreamingLevelSaveData;
+    levelData.destroyedActors = ur.readTArray(reader, readObjectReference);
+    return levelData;
+  });
 }
