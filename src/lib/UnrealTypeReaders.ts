@@ -142,8 +142,12 @@ export function inflateChunks(reader: SequentialReader) {
   const data = new Uint8Array(totalSize);
   let offset = 0;
   for (let i = 0; i < inflatedChunks.length; i++) {
-    data.set(inflatedChunks[i], offset);
-    offset += inflatedChunkSizes[i];
+    const buffer = inflatedChunks[i];
+    if (buffer) {
+      data.set(buffer, offset);
+      // biome-ignore lint/style/noNonNullAssertion: the size is defined in the previous loop
+      offset += inflatedChunkSizes[i]!;
+    }
   }
 }
 
