@@ -1,6 +1,7 @@
 // Exports functions to read Unreal types from a SequentialReader.
 
 import SequentialReader from './SequentialReader';
+import { unzlibSync } from 'fflate';
 
 export function readFDateTime(reader: SequentialReader): Date {
   // tick => 100 nanoseconds since 1/1/0001
@@ -103,6 +104,47 @@ export function readFText(reader: SequentialReader) {
   }
 
   throw new Error(`Not implemented: Unable to read FText with Flags=${flags.toString(2)}, HistoryType=${historyType}`);
+}
+
+export function inflateChunk(reader: SequentialReader) {
+  const magicNumber = reader.readUint();
+  if (magicNumber !== 0x9e2a83c1) {
+    throw new Error(`Invalid magic number: ${magicNumber.toString(16)}`);
+  }
+  const version = reader.readUint();
+  if (version !== 0x22222222) {
+    throw new Error(`Not implemented: Unable to inflate chunk with version ${version.toString(16)}`);
+  }
+  reader.skip(8); //max chunk size 131072 or 0x20000
+  const compressorNum = reader.readByte();
+  if (compressorNum !== 3) {
+    throw new Error(`Not implemented: Unable to inflate chunk with compressorNum ${compressorNum}, not zlib`);
+  }
+  reader.skip(16); // (compressed and uncompressed) size summary
+  const compressedSize = Number(reader.readInt64());
+  const inflatedSize = Number(reader.readInt64());
+  const inflatedData = new Uint8Array(inflatedSize);
+  unzlibSync(new Uint8Array(reader.slice(compressedSize)), { out: inflatedData });
+  return { inflatedData, inflatedSize };
+}
+
+export function inflateChunks(reader: SequentialReader) {
+  const inflatedChunks: Uint8Array[] = [];
+  const inflatedChunkSizes: number[] = [];
+  let totalSize = 0;
+  while (!reader.isEOF) {
+    const { inflatedData, inflatedSize } = inflateChunk(reader);
+    inflatedChunkSizes.push(inflatedSize);
+    inflatedChunks.push(inflatedData);
+    totalSize += inflatedSize;
+  }
+
+  const data = new Uint8Array(totalSize);
+  let offset = 0;
+  for (let i = 0; i < inflatedChunks.length; i++) {
+    data.set(inflatedChunks[i], offset);
+    offset += inflatedChunkSizes[i];
+  }
 }
 
 interface FPropertyTag {
