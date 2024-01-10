@@ -21,6 +21,14 @@ export namespace SatisfactorySave {
     saveDataHash: ur.FMD5Hash;
     isCreativeModeEnabled: boolean;
   }
+
+  export interface ValidationGrid {
+    cellSize: number;
+    gridHash: number;
+    cellHash: Map<string, number>;
+  }
+
+  export type ValidationGrids = Map<string, ValidationGrid>;
 }
 
 export class SatisfactorySaveReader {
@@ -112,9 +120,23 @@ export class SatisfactorySaveReader {
   }
 
   /**
+   * Reads the validation grids from a SequentialReader
+   * @param {SequentialReader} reader The reader to read the validation grids from
+   * @returns {SatisfactorySave.ValidationGrids} The validation grids data
+   */
+  static readValidationGrids(reader: SequentialReader): SatisfactorySave.ValidationGrids {
+    return ur.readTMap(reader, ur.readFString, (r) => ({
+      cellSize: r.readInt(),
+      gridHash: r.readUint(),
+      cellHash: ur.readTMap(r, ur.readFString, (r) => r.readUint()),
+    }));
+  }
+
+  /**
    * Generator function to read a save file from a file object.
    * Yields:
    *  - Header
+   *  - Validation Grids
    * @param {File} file The file to read from
    */
   static async *readFromFile(file: File) {
@@ -162,5 +184,9 @@ export class SatisfactorySaveReader {
 
     const remainingData = fullChunk.slice(headerSize);
     const inflatedData = SatisfactorySaveReader.inflateChunks(new SequentialReader(remainingData));
+    const reader = new SequentialReader(inflatedData);
+    const bodySize = reader.readInt64();
+    const validationGrids = SatisfactorySaveReader.readValidationGrids(reader);
+    yield validationGrids;
   }
 }
