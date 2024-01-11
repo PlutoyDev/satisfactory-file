@@ -253,52 +253,51 @@ type FGObject = (
   propertyGuid?: ur.FGuid;
 };
 
-/**
- * Yields:
- * - Object count
- * - FGObject... (Object count times)
- * Returns: {
- *  objects: FGObject[];
- *  tocDestroyedActors?: DestroyedActor[];
- * }
- */
-export function readLevelObjectData(reader: SequentialReader) {
+export function* readLevelObjectData(reader: SequentialReader) {
   const tocBlobLength = reader.readInt64AsNumber();
-  const tocBlob = reader.slice(tocBlobLength);
-  // reader is now at the data blob.
-
+  const tocBlob = reader.slice(tocBlobLength); // Will remove the TOC blob from the reader
   const tocReader = new SequentialReader(tocBlob);
+
+  const dataBlobLength = reader.readInt64AsNumber();
+  const dataBlob = reader.slice(dataBlobLength); // Will remove the data blob from the reader
+  const dataReader = new SequentialReader(dataBlob);
+
   const objectCount = tocReader.readInt();
+  const dataCount = dataReader.readInt();
+
+  if (objectCount !== dataCount) {
+    throw new Error(`Unable to read Objects: objectCount (${objectCount}) !== dataCount (${dataCount})`);
+  }
+
+  yield objectCount;
 
   const objects: FGObject[] = [];
   for (let i = 0; i < objectCount; i++) {
     const object: Partial<FGObject> = readFGObjectSaveHeader(tocReader);
     if (object.type === 1) {
-      object.parent = readObjectReference(reader);
-      object.children = ur.readTArray(reader, readObjectReference);
+      object.parent = readObjectReference(dataReader);
+      object.children = ur.readTArray(dataReader, readObjectReference);
     }
-    object.properties = readFProperties(reader);
-    object.hasPropertyGuid = reader.readInt() !== 0;
+    object.properties = readFProperties(dataReader);
+    object.hasPropertyGuid = dataReader.readInt() !== 0;
     if (object.hasPropertyGuid) {
-      object.propertyGuid = ur.readFGuid(reader);
+      object.propertyGuid = ur.readFGuid(dataReader);
     }
+    objects.push(object as FGObject);
+    yield object;
   }
-
-  const data: {
-    objects: FGObject[];
-    tocDestroyedActors?: DestroyedActor[];
-  } = { objects };
 
   if (!tocReader.isEOF) {
     // Have destroyed actors in TOC
-    const destroyedActorCount = tocReader.readInt();
-    data.tocDestroyedActors = [];
-    for (let i = 0; i < destroyedActorCount; i++) {
-      data.tocDestroyedActors.push(readObjectReference(tocReader));
+    const count = tocReader.readInt();
+    if (count !== 0) {
+      const tocDestroyedActors = [];
+      for (let i = 0; i < count; i++) {
+        tocDestroyedActors.push(readObjectReference(tocReader));
+      }
+      yield tocDestroyedActors;
     }
   }
-
-  return data;
 }
 
 interface PerLevelStreamingLevelSaveData {
@@ -307,10 +306,34 @@ interface PerLevelStreamingLevelSaveData {
   destroyedActors?: DestroyedActor[];
 }
 
-export function readPerLevelStreamingLevelDataMap(reader: SequentialReader) {
+export function readPerLevelStreamingLevelDataMap(
+  reader: SequentialReader,
+): Map<string, PerLevelStreamingLevelSaveData> {
   return ur.readTMap(reader, ur.readFString, (reader) => {
-    const levelData = readLevelObjectData(reader) as PerLevelStreamingLevelSaveData;
-    levelData.destroyedActors = ur.readTArray(reader, readObjectReference);
-    return levelData;
+    const levelDataGen = readLevelObjectData(reader);
+    const [objCount, ...objects] = Array.from(levelDataGen);
+    const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
+    return {
+      objects: objects as FGObject[],
+      tocDestroyedActors: tocDestroyedActors,
+      destroyedActors: ur.readTArray(reader, readObjectReference),
+    };
   });
+}
+
+interface PersistentAndRuntimeSaveData {
+  objects: FGObject[];
+  tocDestroyedActors?: DestroyedActor[];
+  levelToDestroyedActorsMap?: Map<string, DestroyedActor[]>;
+}
+
+export function readPersistentAndRuntimeData(reader: SequentialReader): PersistentAndRuntimeSaveData {
+  const levelDataGen = readLevelObjectData(reader);
+  const [objCount, ...objects] = Array.from(levelDataGen);
+  const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
+  return {
+    objects: objects as FGObject[],
+    tocDestroyedActors: tocDestroyedActors,
+    levelToDestroyedActorsMap: ur.readTMap(reader, ur.readFString, (r) => ur.readTArray(r, readObjectReference)),
+  };
 }
