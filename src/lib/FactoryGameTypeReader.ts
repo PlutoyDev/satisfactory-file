@@ -292,7 +292,7 @@ export function* readLevelObjectData(reader: SequentialReader) {
     // Have destroyed actors in TOC
     const count = tocReader.readInt();
     if (count !== 0) {
-      const tocDestroyedActors = [];
+      const tocDestroyedActors: DestroyedActor[] = [];
       for (let i = 0; i < count; i++) {
         tocDestroyedActors.push(readObjectReference(tocReader));
       }
