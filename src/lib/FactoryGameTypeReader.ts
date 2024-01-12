@@ -1,5 +1,6 @@
 import SequentialReader from './SequentialReader';
 import * as ur from './UnrealTypeReaders';
+import * as bsr from './BinaryStructs';
 
 export interface Header {
   saveHeaderVersion: number;
@@ -170,7 +171,7 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
       }
     }
     // @ts-ignore
-    typeReader = (structName && StructReaders[`read${structName}`]) || readFProperties;
+    typeReader = (structName && bsr[`read${structName}`]) || readFProperties;
   }
 
   if (!typeReader) {
