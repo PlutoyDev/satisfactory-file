@@ -9,6 +9,10 @@
     "strict": true /* Enable all strict type-checking options. */,
     "noUncheckedIndexedAccess": true /* Add 'undefined' to a type when accessed using an index. */,
     "skipLibCheck": true /* Skip type checking all .d.ts files. */,
-    "checkJs": true /* Enable error reporting in type-checked JavaScript files. */
+    "checkJs": true /* Enable error reporting in type-checked JavaScript files. */,
+    "baseUrl": "./src",
+    "paths": {
+      "@lib/*": ["./lib/*"]
+    }
   }
 }

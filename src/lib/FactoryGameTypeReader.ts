@@ -67,32 +67,20 @@ export interface ValidationGrid {
 export type ValidationGrids = Map<string, ValidationGrid>;
 
 export function readValidationGrids(reader: SequentialReader): ValidationGrids {
-  return ur.readTMap(reader, ur.readFString, (reader) => {
+  return ur.readTMap(reader, ur.readFString, reader => {
     const cellSize = reader.readFloat();
     const gridHash = reader.readInt();
-    const cellHash = ur.readTMap(reader, ur.readFString, (r) => r.readInt());
+    const cellHash = ur.readTMap(reader, ur.readFString, r => r.readInt());
     return { cellSize, gridHash, cellHash };
   });
 }
 
-export interface ObjectReference {
-  levelName: string;
-  pathName: string;
-}
-
-export type DestroyedActor = ObjectReference;
-
-export function readObjectReference(reader: SequentialReader): ObjectReference {
-  const levelName = ur.readFString(reader);
-  const pathName = ur.readFString(reader);
-  return { levelName, pathName };
-}
-
+export type DestroyedActor = ur.ObjectReference;
 export interface FObjectBase {
   /** 0: Object, 1: Actor */
   type: 0 | 1;
   className: string;
-  reference: ObjectReference;
+  reference: ur.ObjectReference;
 }
 
 export interface FObjectSaveHeader extends FObjectBase {
@@ -107,10 +95,12 @@ export interface FActorSaveHeader extends FObjectBase {
   wasPlacedInLevel: boolean;
 }
 
-export function readFGObjectSaveHeader(reader: SequentialReader): FObjectSaveHeader | FActorSaveHeader {
+export function readFGObjectSaveHeader(
+  reader: SequentialReader
+): FObjectSaveHeader | FActorSaveHeader {
   const type = reader.readInt() as 0 | 1;
   const className = ur.readFString(reader);
-  const reference = readObjectReference(reader);
+  const reference = ur.readObjectReference(reader);
   if (type === 0) {
     const outerPathName = ur.readFString(reader);
     return { type, className, reference, outerPathName };
@@ -120,25 +110,32 @@ export function readFGObjectSaveHeader(reader: SequentialReader): FObjectSaveHea
     const needTransform = reader.readInt() !== 0;
     const transform = ur.readFTransform3f(reader);
     const wasPlacedInLevel = reader.readInt() !== 0;
-    return { type, className, reference, needTransform, transform, wasPlacedInLevel };
+    return {
+      type,
+      className,
+      reference,
+      needTransform,
+      transform,
+      wasPlacedInLevel,
+    };
   }
 
   throw new Error(`Invalid type ${type}`);
 }
 
 const readerMap = {
-  Int8: (r) => r.readInt8(),
-  Int: (r) => r.readInt(),
-  Int64: (r) => r.readInt64(),
-  UInt32: (r) => r.readUint(),
-  Float: (r) => r.readFloat(),
-  Double: (r) => r.readDouble(),
+  Int8: r => r.readInt8(),
+  Int: r => r.readInt(),
+  Int64: r => r.readInt64(),
+  UInt32: r => r.readUint(),
+  Float: r => r.readFloat(),
+  Double: r => r.readDouble(),
   Enum: ur.readFString,
   Str: ur.readFString,
   Name: ur.readFString,
   Text: ur.readFText,
-  Object: readObjectReference,
-  Interface: readObjectReference,
+  Object: ur.readObjectReference,
+  Interface: ur.readObjectReference,
   // biome-ignore lint/suspicious/noExplicitAny: doesn't matter
 } satisfies Record<string, (r: SequentialReader) => any>;
 
@@ -149,7 +146,10 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
     typeReader = readerMap[valueType as keyof typeof readerMap];
   } else if (valueType === 'Byte') {
     // Not sure why the type is Byte but the value is stored as String
-    typeReader = !tag.enumName || tag.enumName === 'None' ? readerMap.Int8 : ur.readFString;
+    typeReader =
+      !tag.enumName || tag.enumName === 'None'
+        ? readerMap.Int8
+        : ur.readFString;
   } else if (valueType === 'Struct') {
     let innerTag: ur.FPropertyTag | undefined = undefined;
     let structName: string | undefined = tag.structName;
@@ -165,7 +165,10 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
       // Instead, it store it as TLVs that can be read using readProperties
       // Except 2 case: where tag.name are mSaveData, mUnresolvedSaveData
       // Both use FIntVector as key but doesn't have field names
-      if ((tag.name === 'mSaveData' || tag.name === 'mUnresolvedSaveData') && !tag.valueType) {
+      if (
+        (tag.name === 'mSaveData' || tag.name === 'mUnresolvedSaveData') &&
+        !tag.valueType
+      ) {
         // If tag.valueType is undefined, the valueType the Key
         structName = 'IntVector';
       }
@@ -180,7 +183,9 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   }
 
   if (tag.type === 'Map' && tag.valueType) {
-    const keyReader = getTypeReader(reader, tag) as (r: SequentialReader) => unknown;
+    const keyReader = getTypeReader(reader, tag) as (
+      r: SequentialReader
+    ) => unknown;
     return (r: SequentialReader) => {
       const key = keyReader(r);
       const value = typeReader?.(r);
@@ -191,7 +196,10 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   return typeReader;
 }
 
-export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | undefined = undefined) {
+export function readFProperty(
+  reader: SequentialReader,
+  tag: ur.FPropertyTag | undefined = undefined
+) {
   const localTag = tag ?? ur.readFPropertyTag(reader);
   if (localTag === null) {
     return null;
@@ -202,14 +210,22 @@ export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | u
   }
 
   let count: number | undefined = undefined;
-  if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+  if (
+    localTag.type === 'Array' ||
+    localTag.type === 'Set' ||
+    localTag.type === 'Map'
+  ) {
     if (localTag.type === 'Set' || localTag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
     count = reader.readInt();
   }
 
   const valueReader = getTypeReader(reader, localTag);
 
-  if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+  if (
+    localTag.type === 'Array' ||
+    localTag.type === 'Set' ||
+    localTag.type === 'Map'
+  ) {
     const values: unknown[] = [];
     // biome-ignore lint/style/noNonNullAssertion: <explanation>
     for (let i = 0; i < count!; i++) {
@@ -245,8 +261,8 @@ export function readFProperties(reader: SequentialReader) {
 type FGObject = (
   | FObjectSaveHeader
   | (FActorSaveHeader & {
-      parent: ObjectReference;
-      children: ObjectReference[];
+      parent: ur.ObjectReference;
+      children: ur.ObjectReference[];
     })
 ) & {
   properties: Record<string, unknown>;
@@ -267,7 +283,9 @@ export function* readLevelObjectData(reader: SequentialReader) {
   const dataCount = dataReader.readInt();
 
   if (objectCount !== dataCount) {
-    throw new Error(`Unable to read Objects: objectCount (${objectCount}) !== dataCount (${dataCount})`);
+    throw new Error(
+      `Unable to read Objects: objectCount (${objectCount}) !== dataCount (${dataCount})`
+    );
   }
 
   yield objectCount;
@@ -276,8 +294,8 @@ export function* readLevelObjectData(reader: SequentialReader) {
   for (let i = 0; i < objectCount; i++) {
     const object: Partial<FGObject> = readFGObjectSaveHeader(tocReader);
     if (object.type === 1) {
-      object.parent = readObjectReference(dataReader);
-      object.children = ur.readTArray(dataReader, readObjectReference);
+      object.parent = ur.readObjectReference(dataReader);
+      object.children = ur.readTArray(dataReader, ur.readObjectReference);
     }
     object.properties = readFProperties(dataReader);
     object.hasPropertyGuid = dataReader.readInt() !== 0;
@@ -294,7 +312,7 @@ export function* readLevelObjectData(reader: SequentialReader) {
     if (count !== 0) {
       const tocDestroyedActors: DestroyedActor[] = [];
       for (let i = 0; i < count; i++) {
-        tocDestroyedActors.push(readObjectReference(tocReader));
+        tocDestroyedActors.push(ur.readObjectReference(tocReader));
       }
       yield tocDestroyedActors;
     }
@@ -308,16 +326,19 @@ interface PerLevelStreamingLevelSaveData {
 }
 
 export function readPerLevelStreamingLevelDataMap(
-  reader: SequentialReader,
+  reader: SequentialReader
 ): Map<string, PerLevelStreamingLevelSaveData> {
-  return ur.readTMap(reader, ur.readFString, (reader) => {
+  return ur.readTMap(reader, ur.readFString, reader => {
     const levelDataGen = readLevelObjectData(reader);
     const [objCount, ...objects] = Array.from(levelDataGen);
-    const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
+    const tocDestroyedActors =
+      objects.length > (objCount as number)
+        ? (objects.pop() as DestroyedActor[])
+        : undefined;
     return {
       objects: objects as FGObject[],
       tocDestroyedActors: tocDestroyedActors,
-      destroyedActors: ur.readTArray(reader, readObjectReference),
+      destroyedActors: ur.readTArray(reader, ur.readObjectReference),
     };
   });
 }
@@ -328,13 +349,20 @@ interface PersistentAndRuntimeSaveData {
   levelToDestroyedActorsMap?: Map<string, DestroyedActor[]>;
 }
 
-export function readPersistentAndRuntimeData(reader: SequentialReader): PersistentAndRuntimeSaveData {
+export function readPersistentAndRuntimeData(
+  reader: SequentialReader
+): PersistentAndRuntimeSaveData {
   const levelDataGen = readLevelObjectData(reader);
   const [objCount, ...objects] = Array.from(levelDataGen);
-  const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
+  const tocDestroyedActors =
+    objects.length > (objCount as number)
+      ? (objects.pop() as DestroyedActor[])
+      : undefined;
   return {
     objects: objects as FGObject[],
     tocDestroyedActors: tocDestroyedActors,
-    levelToDestroyedActorsMap: ur.readTMap(reader, ur.readFString, (r) => ur.readTArray(r, readObjectReference)),
+    levelToDestroyedActorsMap: ur.readTMap(reader, ur.readFString, r =>
+      ur.readTArray(r, ur.readObjectReference)
+    ),
   };
 }

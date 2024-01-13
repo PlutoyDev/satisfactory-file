@@ -15,5 +15,11 @@
     "rules": {
       "recommended": true
     }
+  },
+  "vcs": {
+    "enabled": true,
+    "useIgnoreFile": true,
+    "defaultBranch": "main",
+    "clientKind": "git"
   }
 }
