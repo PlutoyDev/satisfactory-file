@@ -282,19 +282,21 @@ export function* readLevelObjectData(reader: SequentialReader) {
     object.properties = readFProperties(dataReader);
 
     if (dataReader.offset < expectedEnd) {
+      const actualEnd = dataReader.offset;
       const diff = expectedEnd - dataReader.offset;
       const excess = new Uint8Array(dataReader.slice(diff));
       if (excess.some((v) => v !== 0)) {
         console.warn('Object data not fully read', {
           object,
-          actual: dataReader.offset,
+          diff,
+          actual: actualEnd,
           expected: expectedEnd,
           data: btoa(String.fromCharCode(...excess)),
         });
       } else {
-        console.info(`Object data not fully read, ${diff} bytes of 0s`, {
+        console.debug(`Object data not fully read, ${diff} bytes of 0s`, {
           object,
-          actual: dataReader.offset,
+          actual: actualEnd,
           expected: expectedEnd,
         });
       }
