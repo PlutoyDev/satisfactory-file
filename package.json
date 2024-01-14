@@ -5,6 +5,18 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./utils/browser": {
+      "import": "./dist/utils/browser.mjs",
+      "require": "./dist/utils/browser.js",
+      "types": "./dist/utils/browser.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "lint": "tsc",
