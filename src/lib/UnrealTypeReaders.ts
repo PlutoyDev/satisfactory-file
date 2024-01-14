@@ -124,7 +124,9 @@ export function inflateChunk(reader: SequentialReader) {
   const compressedSize = Number(reader.readInt64());
   const inflatedSize = Number(reader.readInt64());
   const inflatedData = new Uint8Array(inflatedSize);
-  unzlibSync(new Uint8Array(reader.slice(compressedSize)), { out: inflatedData });
+  unzlibSync(new Uint8Array(reader.slice(compressedSize)), {
+    out: inflatedData,
+  });
   return { inflatedData, inflatedSize };
 }
 
@@ -149,6 +151,7 @@ export function inflateChunks(reader: SequentialReader) {
       offset += inflatedChunkSizes[i]!;
     }
   }
+  return data;
 }
 
 export interface FPropertyTag {

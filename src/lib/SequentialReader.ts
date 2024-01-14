@@ -10,7 +10,7 @@ export class SequentialReader {
       offset?: number;
       autoIncrement?: boolean;
       littleEndian?: boolean;
-    } = {}
+    } = {},
   ) {
     this.dataView = new DataView(buffer);
     this.offset = options?.offset ?? 0;
