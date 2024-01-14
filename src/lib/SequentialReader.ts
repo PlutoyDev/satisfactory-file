@@ -4,11 +4,18 @@ export class SequentialReader {
   autoIncrement: boolean;
   littleEndian: boolean;
 
-  constructor(buffer: ArrayBuffer, offset = 0, options: { autoIncrement?: boolean; littleEndian?: boolean } = {}) {
+  constructor(
+    buffer: ArrayBuffer,
+    options: {
+      offset?: number;
+      autoIncrement?: boolean;
+      littleEndian?: boolean;
+    } = {}
+  ) {
     this.dataView = new DataView(buffer);
-    this.offset = offset;
+    this.offset = options?.offset ?? 0;
     this.autoIncrement = options?.autoIncrement ?? false;
-    this.littleEndian = options?.littleEndian ?? false;
+    this.littleEndian = options?.littleEndian ?? true;
   }
 
   get length(): number {
