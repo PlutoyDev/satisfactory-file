@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "moduleResolution": "bundler",
+    "checkJs": true,
+    "allowJs": true,
+    "lib": ["es2022", "dom"],
+    "target": "ESNext",
+    "module": "ESNext"
+  }
+}
