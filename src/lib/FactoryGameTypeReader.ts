@@ -68,9 +68,9 @@ export type ValidationGrids = Map<string, ValidationGrid>;
 
 export function readValidationGrids(reader: SequentialReader): ValidationGrids {
   return ur.readTMap(reader, ur.readFString, reader => {
-    const cellSize = reader.readFloat();
-    const gridHash = reader.readInt();
-    const cellHash = ur.readTMap(reader, ur.readFString, r => r.readInt());
+    const cellSize = reader.readInt();
+    const gridHash = reader.readUint();
+    const cellHash = ur.readTMap(reader, ur.readFString, r => r.readUint());
     return { cellSize, gridHash, cellHash };
   });
 }
