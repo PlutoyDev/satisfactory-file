@@ -439,7 +439,7 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
         for (let j = 0; j < len; j++) {
           objects.push(levelDataGen.next().value as FGObject);
         }
-        onObjectsPage(objects, i, pageCount);
+        onObjectsPage(objects, i * objectPerPage, objCount);
       }
 
       const { done: hasTocDestroyedActors, value: tocDestroyedActors } = levelDataGen.next() as {
