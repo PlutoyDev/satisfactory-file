@@ -383,10 +383,14 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
     data = source;
   }
 
-  const reader = new SequentialReader(data);
+  // Raw reader for non-compressed data, like header
+  const rawReader = new SequentialReader(data);
   try {
-    const header = readHeader(reader);
+    const header = readHeader(rawReader);
     callbacks.onHeader?.(header);
+    const inflatedData = ur.inflateChunks(rawReader);
+
+    const reader = new SequentialReader(inflatedData.buffer);
     const validationGrids = readValidationGrids(reader);
     callbacks.onValidationGrids?.(validationGrids);
     const perLevelStreamingLevelDataMap = readPerLevelStreamingLevelDataMap(reader);
