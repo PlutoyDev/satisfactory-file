@@ -175,7 +175,7 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   }
 
   if (tag.type === 'Map' && tag.valueType) {
-    const keyReader = getTypeReader(reader, tag) as (r: SequentialReader) => unknown;
+    const keyReader = getTypeReader(reader, { ...tag, valueType: undefined }) as (r: SequentialReader) => unknown;
     return (r: SequentialReader) => {
       const key = keyReader(r);
       const value = typeReader?.(r);
@@ -244,17 +244,18 @@ type FGObject = (
       children: ur.ObjectReference[];
     })
 ) & {
+  version: number;
   properties: Record<string, unknown>;
   hasPropertyGuid: boolean; // (default is false)
   propertyGuid?: ur.FGuid;
 };
 
 export function* readLevelObjectData(reader: SequentialReader) {
-  const tocBlobLength = reader.readInt64AsNumber();
+  const tocBlobLength = reader.readUint64AsNumber();
   const tocBlob = reader.slice(tocBlobLength); // Will remove the TOC blob from the reader
   const tocReader = new SequentialReader(tocBlob);
 
-  const dataBlobLength = reader.readInt64AsNumber();
+  const dataBlobLength = reader.readUint64AsNumber();
   const dataBlob = reader.slice(dataBlobLength); // Will remove the data blob from the reader
   const dataReader = new SequentialReader(dataBlob);
 
@@ -270,6 +271,9 @@ export function* readLevelObjectData(reader: SequentialReader) {
   const objects: FGObject[] = [];
   for (let i = 0; i < objectCount; i++) {
     const object: Partial<FGObject> = readFGObjectSaveHeader(tocReader);
+
+    object.version = dataReader.readInt();
+    dataReader.skip(8); // Skip unknown int and size
     if (object.type === 1) {
       object.parent = ur.readObjectReference(dataReader);
       object.children = ur.readTArray(dataReader, ur.readObjectReference);
@@ -389,8 +393,8 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
     const header = readHeader(rawReader);
     callbacks.onHeader?.(header);
     const inflatedData = ur.inflateChunks(rawReader);
-
     const reader = new SequentialReader(inflatedData.buffer);
+    reader.skip(8); //Body size uint64
     const validationGrids = readValidationGrids(reader);
     callbacks.onValidationGrids?.(validationGrids);
     const perLevelStreamingLevelDataMap = readPerLevelStreamingLevelDataMap(reader);
