@@ -375,7 +375,7 @@ export function readUnresolvedDestroyedActor(
 
 // A much fine grain callback
 interface FinnerPersistentLevelCallback {
-  objectPerPage: number;
+  objectPerPage?: number;
   onObjectsPage: (objects: FGObject[], index: number, total: number) => void;
   onTocDestroyedActors?: (actors: DestroyedActor[]) => void;
   onLevelToDestroyedActorsMap?: (
@@ -399,7 +399,7 @@ export interface ReadSaveCallback {
 
 export async function readSave(
   source: ArrayBuffer | ReadableStream,
-  callbacks: ReadSaveCallback
+  callbacks: ReadSaveCallback = {}
 ) {
   let data: ArrayBuffer;
   if (source instanceof ReadableStream) {
