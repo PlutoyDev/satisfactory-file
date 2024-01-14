@@ -1,5 +1,5 @@
 import type { SequentialReader } from './SequentialReader';
-import { readFString, readObjectReference, type ObjectReference } from './UnrealTypeReaders';
+import { readFString, readObjectReference, type ObjectReference, readFPropertyTag } from './UnrealTypeReaders';
 
 // Binary Structs
 export interface Vector {
@@ -82,7 +82,7 @@ export function readInventoryItem(reader: SequentialReader): InventoryItem {
   reader.skip(4); // Unknown
   const itemClass = readFString(reader);
   const reference = readObjectReference(reader);
-
+  reader.skip(38); // Property Tag
   const numItems = reader.readInt();
   return {
     itemClass,
