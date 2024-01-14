@@ -273,18 +273,37 @@ export function* readLevelObjectData(reader: SequentialReader) {
     const object: Partial<FGObject> = readFGObjectSaveHeader(tocReader);
 
     object.version = dataReader.readInt();
-    dataReader.skip(8); // Skip unknown int and size
+    dataReader.skip(4); // Skip unknown int
+    const expectedEnd = dataReader.offset + dataReader.readInt(); // Size of the object
     if (object.type === 1) {
       object.parent = ur.readObjectReference(dataReader);
       object.children = ur.readTArray(dataReader, ur.readObjectReference);
     }
     object.properties = readFProperties(dataReader);
-    object.hasPropertyGuid = dataReader.readInt() !== 0;
-    if (object.hasPropertyGuid) {
-      object.propertyGuid = ur.readFGuid(dataReader);
+
+    if (dataReader.offset < expectedEnd) {
+      const diff = expectedEnd - dataReader.offset;
+      const excess = new Uint8Array(dataReader.slice(diff));
+      if (excess.some((v) => v !== 0)) {
+        console.warn('Object data not fully read', {
+          object,
+          actual: dataReader.offset,
+          expected: expectedEnd,
+          data: btoa(String.fromCharCode(...excess)),
+        });
+      } else {
+        console.info(`Object data not fully read, ${diff} bytes of 0s`, {
+          object,
+          actual: dataReader.offset,
+          expected: expectedEnd,
+        });
+      }
     }
-    objects.push(object as FGObject);
+
+    object.hasPropertyGuid = dataReader.readInt() !== 0;
+
     yield object;
+    objects.push(object as FGObject);
   }
 
   if (!tocReader.isEOF) {
@@ -399,6 +418,7 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
     callbacks.onValidationGrids?.(validationGrids);
     const perLevelStreamingLevelDataMap = readPerLevelStreamingLevelDataMap(reader);
     callbacks.onPerLevelStreamingLevelDataMap?.(perLevelStreamingLevelDataMap);
+
     if (typeof callbacks.onPersistentLevel === 'object') {
       const {
         objectPerPage = 100,
