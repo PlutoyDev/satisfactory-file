@@ -319,7 +319,7 @@ export function* readLevelObjectData(reader: SequentialReader) {
   }
 }
 
-interface PerLevelStreamingLevelSaveData {
+export interface PerLevelStreamingLevelSaveData {
   objects: FGObject[];
   tocDestroyedActors?: DestroyedActor[];
   destroyedActors?: DestroyedActor[];
@@ -343,7 +343,7 @@ export function readPerLevelStreamingLevelDataMap(
   });
 }
 
-interface PersistentAndRuntimeSaveData {
+export interface PersistentAndRuntimeSaveData {
   objects: FGObject[];
   tocDestroyedActors?: DestroyedActor[];
   levelToDestroyedActorsMap?: Map<string, DestroyedActor[]>;
@@ -365,4 +365,132 @@ export function readPersistentAndRuntimeData(
       ur.readTArray(r, ur.readObjectReference)
     ),
   };
+}
+
+export function readUnresolvedDestroyedActor(
+  reader: SequentialReader
+): DestroyedActor[] {
+  return ur.readTArray(reader, ur.readObjectReference);
+}
+
+// A much fine grain callback
+interface FinnerPersistentLevelCallback {
+  objectPerPage: number;
+  onObjectsPage: (objects: FGObject[], index: number, total: number) => void;
+  onTocDestroyedActors?: (actors: DestroyedActor[]) => void;
+  onLevelToDestroyedActorsMap?: (
+    levelToDestroyedActorsMap: Map<string, DestroyedActor[]>
+  ) => void;
+}
+
+export interface ReadSaveCallback {
+  onHeader?: (header: Header) => void;
+  onValidationGrids?: (validationGrids: ValidationGrids) => void;
+  onPerLevelStreamingLevelDataMap?: (
+    perLevelStreamingLevelDataMap: Map<string, PerLevelStreamingLevelSaveData>
+  ) => void;
+  onPersistentLevel?:
+    | ((persistentLevel: PersistentAndRuntimeSaveData) => void)
+    | FinnerPersistentLevelCallback;
+  onUnresolvedDestroyedActors?: (
+    unresolvedDestroyedActors: DestroyedActor[]
+  ) => void;
+}
+
+export async function readSave(
+  source: ArrayBuffer | ReadableStream,
+  callbacks: ReadSaveCallback
+) {
+  let data: ArrayBuffer;
+  if (source instanceof ReadableStream) {
+    const reader = source.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalLength = 0;
+    // TODO: Replace with for await (const chunk of reader) when it's supported
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+      totalLength += value.length;
+    }
+    const dataTypedArray = new Uint8Array(totalLength);
+    for (let i = 0, offset = 0; i < chunks.length; i++) {
+      // biome-ignore lint/style/noNonNullAssertion: known to be not null
+      const chunk = chunks[i]!;
+      dataTypedArray.set(chunk, offset);
+      offset += chunk.length;
+    }
+    data = dataTypedArray.buffer;
+  } else {
+    data = source;
+  }
+
+  const reader = new SequentialReader(data);
+  try {
+    const header = readHeader(reader);
+    callbacks.onHeader?.(header);
+    const validationGrids = readValidationGrids(reader);
+    callbacks.onValidationGrids?.(validationGrids);
+    const perLevelStreamingLevelDataMap =
+      readPerLevelStreamingLevelDataMap(reader);
+    callbacks.onPerLevelStreamingLevelDataMap?.(perLevelStreamingLevelDataMap);
+    if (typeof callbacks.onPersistentLevel === 'object') {
+      const {
+        objectPerPage = 100,
+        onObjectsPage,
+        onTocDestroyedActors,
+        onLevelToDestroyedActorsMap,
+      } = callbacks.onPersistentLevel;
+
+      const levelDataGen = readLevelObjectData(reader);
+      const objCount = levelDataGen.next().value as number;
+      const pageCount = Math.ceil(objCount / objectPerPage);
+
+      for (let i = 0; i < pageCount; i++) {
+        const objects: FGObject[] = [];
+        const len = Math.min(objectPerPage, objCount - i * objectPerPage);
+        for (let j = 0; j < len; j++) {
+          objects.push(levelDataGen.next().value as FGObject);
+        }
+        onObjectsPage(objects, i, pageCount);
+      }
+
+      const { done: hasTocDestroyedActors, value: tocDestroyedActors } =
+        levelDataGen.next() as {
+          done: boolean;
+          value: DestroyedActor[] | undefined;
+        };
+
+      if (hasTocDestroyedActors) {
+        // biome-ignore lint/style/noNonNullAssertion: not done, so value is not undefined
+        onTocDestroyedActors?.(tocDestroyedActors!);
+      }
+      const levelToDestroyedActorsMap = ur.readTMap(reader, ur.readFString, r =>
+        ur.readTArray(r, ur.readObjectReference)
+      );
+      onLevelToDestroyedActorsMap?.(levelToDestroyedActorsMap);
+    } else {
+      const persistentLevel = readPersistentAndRuntimeData(reader);
+      callbacks.onPersistentLevel?.(persistentLevel);
+    }
+
+    const unresolvedDestroyedActors = readUnresolvedDestroyedActor(reader);
+    callbacks.onUnresolvedDestroyedActors?.(unresolvedDestroyedActors);
+
+    if (!reader.isEOF) {
+      throw new Error('Not EOF');
+    }
+
+    return {
+      header,
+      validationGrids,
+      perLevelStreamingLevelDataMap,
+      unresolvedDestroyedActors,
+    };
+  } catch (e) {
+    console.error('Error reading save', e);
+    throw e;
+  }
 }
