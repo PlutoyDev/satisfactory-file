@@ -290,7 +290,7 @@ type FGObject = (
     })
 ) & {
   version: number;
-  properties: Record<string, unknown>;
+  properties: ReturnType<typeof readFProperties>;
   hasPropertyGuid: boolean; // (default is false)
   extraData?: ArrayBuffer; // Extra data after the object, if any
 };
@@ -388,7 +388,7 @@ export function* readLevelObjectData(reader: SequentialReader) {
 }
 
 export interface PerLevelStreamingLevelSaveData {
-  objects: FGObject[];
+  objects: (FGObject | ReadFGObjectError)[];
   tocDestroyedActors?: DestroyedActor[];
   destroyedActors?: DestroyedActor[];
 }
@@ -396,33 +396,46 @@ export interface PerLevelStreamingLevelSaveData {
 export function readPerLevelStreamingLevelDataMap(
   reader: SequentialReader,
 ): Map<string, PerLevelStreamingLevelSaveData> {
-  return ur.readTMap(reader, ur.readFString, (reader) => {
-    const levelDataGen = readLevelObjectData(reader);
-    const [objCount, ...objects] = Array.from(levelDataGen);
-    const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
-    return {
-      objects: objects as FGObject[],
-      tocDestroyedActors: tocDestroyedActors,
-      destroyedActors: ur.readTArray(reader, ur.readObjectReference),
-    };
+  return ur.readTMap(reader, ur.readFString, (reader, levelName) => {
+    try {
+      const levelDataGen = readLevelObjectData(reader);
+      const [objCount, ...objects] = Array.from(levelDataGen);
+      const tocDestroyedActors =
+        objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
+      return {
+        objects: objects as (FGObject | ReadFGObjectError)[],
+        tocDestroyedActors: tocDestroyedActors,
+        destroyedActors: ur.readTArray(reader, ur.readObjectReference),
+      };
+    } catch (e) {
+      console.error('Error reading per level streaming level data', {
+        levelName,
+      });
+      throw e;
+    }
   });
 }
 
 export interface PersistentAndRuntimeSaveData {
-  objects: FGObject[];
+  objects: (FGObject | ReadFGObjectError)[];
   tocDestroyedActors?: DestroyedActor[];
   levelToDestroyedActorsMap?: Map<string, DestroyedActor[]>;
 }
 
 export function readPersistentAndRuntimeData(reader: SequentialReader): PersistentAndRuntimeSaveData {
-  const levelDataGen = readLevelObjectData(reader);
-  const [objCount, ...objects] = Array.from(levelDataGen);
-  const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
-  return {
-    objects: objects as FGObject[],
-    tocDestroyedActors: tocDestroyedActors,
-    levelToDestroyedActorsMap: ur.readTMap(reader, ur.readFString, (r) => ur.readTArray(r, ur.readObjectReference)),
-  };
+  try {
+    const levelDataGen = readLevelObjectData(reader);
+    const [objCount, ...objects] = Array.from(levelDataGen);
+    const tocDestroyedActors = objects.length > (objCount as number) ? (objects.pop() as DestroyedActor[]) : undefined;
+    return {
+      objects: objects as (FGObject | ReadFGObjectError)[],
+      tocDestroyedActors: tocDestroyedActors,
+      levelToDestroyedActorsMap: ur.readTMap(reader, ur.readFString, (r) => ur.readTArray(r, ur.readObjectReference)),
+    };
+  } catch (e) {
+    console.error('Error reading persistent and runtime data');
+    throw e;
+  }
 }
 
 export function readUnresolvedDestroyedActor(reader: SequentialReader): DestroyedActor[] {

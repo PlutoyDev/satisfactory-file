@@ -42,13 +42,13 @@ export function readTArray<T>(reader: SequentialReader, readElement: (reader: Se
 export function readTMap<K, V>(
   reader: SequentialReader,
   readKey: (reader: SequentialReader) => K,
-  readValue: (reader: SequentialReader) => V,
+  readValue: (reader: SequentialReader, key: K) => V,
 ): Map<K, V> {
   const length = reader.readInt();
   const result = new Map();
   for (let i = 0; i < length; i++) {
     const key = readKey(reader);
-    const value = readValue(reader);
+    const value = readValue(reader, key);
     result.set(key, value);
   }
   return result;
