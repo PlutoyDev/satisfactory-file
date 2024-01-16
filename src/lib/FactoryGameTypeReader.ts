@@ -23,7 +23,15 @@ export interface Header {
 
 export function readHeader(reader: SequentialReader): Header {
   const saveHeaderVersion = reader.readInt();
+  if (saveHeaderVersion !== 13) {
+    throw new Error(`Unknown save header version ${saveHeaderVersion}`);
+  }
+
   const saveVersion = reader.readInt();
+  if (saveVersion < 42) {
+    throw new Error(`Unknown save version ${saveVersion}`);
+  }
+
   const buildVersion = reader.readInt();
   const mapName = ur.readFString(reader);
   const mapOptions = ur.readFString(reader);
@@ -38,6 +46,7 @@ export function readHeader(reader: SequentialReader): Header {
   const isPartitionedWorld = reader.readInt() !== 0;
   const saveDataHash = ur.readFMD5Hash(reader);
   const isCreativeModeEnabled = reader.readInt() !== 0;
+
   return {
     saveHeaderVersion,
     saveVersion,
