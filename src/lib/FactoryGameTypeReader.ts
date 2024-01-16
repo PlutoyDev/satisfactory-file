@@ -258,7 +258,7 @@ export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag) {
 }
 
 export function readFProperties(reader: SequentialReader) {
-  const properties: Record<string, unknown> = {};
+  const properties: Record<string, unknown> & { $errors?: Record<string, FPropertyReadError> } = {};
   while (true) {
     try {
       const tag = ur.readFPropertyTag(reader);
@@ -292,8 +292,33 @@ type FGObject = (
   version: number;
   properties: Record<string, unknown>;
   hasPropertyGuid: boolean; // (default is false)
-  extraData?: string; // Extra data after the object, if any (base64)
+  extraData?: ArrayBuffer; // Extra data after the object, if any
 };
+
+class ReadFGObjectError extends Error {
+  constructor(
+    public object: FGObject,
+    public data: ArrayBuffer,
+    public objectIndex: number,
+    public error: unknown,
+  ) {
+    super(
+      `Reading object ${object.className} resulted in error: ${
+        error && typeof error === 'object' && 'message' in error ? error.message : error
+      }`,
+    );
+  }
+
+  toJSON() {
+    return {
+      message: this.message,
+      object: this.object,
+      objectIndex: this.objectIndex,
+      dataBase64: btoa(String.fromCharCode(...new Uint8Array(this.data))),
+      error: this.error,
+    };
+  }
+}
 
 export function* readLevelObjectData(reader: SequentialReader) {
   const tocBlobLength = reader.readUint64AsNumber();
@@ -319,23 +344,34 @@ export function* readLevelObjectData(reader: SequentialReader) {
 
     object.version = dataReader.readInt();
     dataReader.skip(4); // Skip unknown int
-    const expectedEnd = dataReader.offset + dataReader.readInt(); // Size of the object
-    if (object.type === 1) {
-      object.parent = ur.readObjectReference(dataReader);
-      object.children = ur.readTArray(dataReader, ur.readObjectReference);
+    const startOffset = dataReader.offset;
+    const size = dataReader.readInt();
+    const expectedEnd = startOffset + size;
+    try {
+      if (object.type === 1) {
+        object.parent = ur.readObjectReference(dataReader);
+        object.children = ur.readTArray(dataReader, ur.readObjectReference);
+      }
+      object.properties = readFProperties(dataReader);
+
+      if (dataReader.offset < expectedEnd) {
+        const diff = expectedEnd - dataReader.offset;
+        object.extraData = dataReader.slice(diff);
+      } else if (dataReader.offset > expectedEnd) {
+        throw new Error(`Expected to read ${size} bytes, but read ${dataReader.offset - startOffset} bytes`);
+      }
+
+      object.hasPropertyGuid = dataReader.readInt() !== 0;
+
+      yield object;
+      objects.push(object as FGObject);
+    } catch (e) {
+      dataReader.offset = startOffset;
+      const unreadableData = dataReader.slice(size);
+      const error = new ReadFGObjectError(object as FGObject, unreadableData, i, e);
+      console.error(error);
+      yield error; // Yield the error, so the caller can handle it, and continue read the rest of the objects
     }
-    object.properties = readFProperties(dataReader);
-
-    if (dataReader.offset < expectedEnd) {
-      const diff = expectedEnd - dataReader.offset;
-      const excess = new Uint8Array(dataReader.slice(diff));
-      object.extraData = btoa(String.fromCharCode(...excess));
-    }
-
-    object.hasPropertyGuid = dataReader.readInt() !== 0;
-
-    yield object;
-    objects.push(object as FGObject);
   }
 
   if (!tocReader.isEOF) {
