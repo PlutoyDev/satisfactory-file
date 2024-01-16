@@ -218,27 +218,26 @@ class FPropertyReadError extends Error {
   }
 }
 
-export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | undefined = undefined) {
-  const localTag = tag ?? ur.readFPropertyTag(reader);
-  if (localTag === null) {
+export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag) {
+  if (tag === null) {
     return null;
   }
 
-  if (localTag.type === 'Bool') {
-    return localTag.boolValue as boolean;
+  if (tag.type === 'Bool') {
+    return tag.boolValue as boolean;
   }
 
   const startOffset = reader.offset;
   try {
     let count: number | undefined = undefined;
-    if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
-      if (localTag.type === 'Set' || localTag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
+    if (tag.type === 'Array' || tag.type === 'Set' || tag.type === 'Map') {
+      if (tag.type === 'Set' || tag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
       count = reader.readInt();
     }
 
-    const valueReader = getTypeReader(reader, localTag);
+    const valueReader = getTypeReader(reader, tag);
 
-    if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+    if (tag.type === 'Array' || tag.type === 'Set' || tag.type === 'Map') {
       const values: unknown[] = [];
       // biome-ignore lint/style/noNonNullAssertion: <explanation>
       for (let i = 0; i < count!; i++) {
@@ -250,8 +249,10 @@ export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | u
   } catch (e) {
     // Property Tag contains the size, which can be used to skip the property when error occurs
     reader.offset = startOffset;
-    const unreadableData = reader.slice(localTag.size);
-    throw new FPropertyReadError(localTag, unreadableData, e);
+    const unreadableData = reader.slice(tag.size);
+    const error = new FPropertyReadError(tag, unreadableData, e);
+    console.error(error);
+    throw error;
     // The property is unreadable, but we can still continue reading the rest of the save
   }
 }
@@ -268,11 +269,14 @@ export function readFProperties(reader: SequentialReader) {
       const value = readFProperty(reader, tag);
       properties[tag.name] = value;
     } catch (e) {
-      console.error('Error parsing property', {
-        offset: reader.offset.toString(16),
-        error: e,
-      });
-      throw e;
+      if (e instanceof FPropertyReadError) {
+        // Store the error in the properties separately in $errors
+        const existingErrors = (properties.$errors ?? {}) as Record<string, FPropertyReadError>;
+        existingErrors[e.tag.name] = e;
+        properties.$errors = existingErrors;
+      } else {
+        throw e;
+      }
     }
   }
   return properties;
