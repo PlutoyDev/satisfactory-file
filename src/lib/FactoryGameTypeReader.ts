@@ -195,6 +195,29 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   return typeReader;
 }
 
+class FPropertyReadError extends Error {
+  constructor(
+    public tag: ur.FPropertyTag,
+    public data: ArrayBuffer,
+    public error: unknown,
+  ) {
+    super(
+      `Reading property ${tag.name} resulted in error: ${
+        error && typeof error === 'object' && 'message' in error ? error.message : error
+      }`,
+    );
+  }
+
+  toJSON() {
+    return {
+      message: this.message,
+      tag: this.tag,
+      dataBase64: btoa(String.fromCharCode(...new Uint8Array(this.data))),
+      error: this.error,
+    };
+  }
+}
+
 export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | undefined = undefined) {
   const localTag = tag ?? ur.readFPropertyTag(reader);
   if (localTag === null) {
@@ -205,23 +228,32 @@ export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag | u
     return localTag.boolValue as boolean;
   }
 
-  let count: number | undefined = undefined;
-  if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
-    if (localTag.type === 'Set' || localTag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
-    count = reader.readInt();
-  }
-
-  const valueReader = getTypeReader(reader, localTag);
-
-  if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
-    const values: unknown[] = [];
-    // biome-ignore lint/style/noNonNullAssertion: <explanation>
-    for (let i = 0; i < count!; i++) {
-      values.push(valueReader(reader));
+  const startOffset = reader.offset;
+  try {
+    let count: number | undefined = undefined;
+    if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+      if (localTag.type === 'Set' || localTag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
+      count = reader.readInt();
     }
-    return values;
+
+    const valueReader = getTypeReader(reader, localTag);
+
+    if (localTag.type === 'Array' || localTag.type === 'Set' || localTag.type === 'Map') {
+      const values: unknown[] = [];
+      // biome-ignore lint/style/noNonNullAssertion: <explanation>
+      for (let i = 0; i < count!; i++) {
+        values.push(valueReader(reader));
+      }
+      return values;
+    }
+    return valueReader(reader);
+  } catch (e) {
+    // Property Tag contains the size, which can be used to skip the property when error occurs
+    reader.offset = startOffset;
+    const unreadableData = reader.slice(localTag.size);
+    throw new FPropertyReadError(localTag, unreadableData, e);
+    // The property is unreadable, but we can still continue reading the rest of the save
   }
-  return valueReader(reader);
 }
 
 export function readFProperties(reader: SequentialReader) {
