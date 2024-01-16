@@ -445,7 +445,7 @@ export function readUnresolvedDestroyedActor(reader: SequentialReader): Destroye
 // A much fine grain callback
 interface FinnerPersistentLevelCallback {
   objectPerPage?: number;
-  onObjectsPage: (objects: FGObject[], index: number, total: number) => void;
+  onObjectsPage: (objects: (FGObject | ReadFGObjectError)[], index: number, total: number) => void;
   onTocDestroyedActors?: (actors: DestroyedActor[]) => void;
   onLevelToDestroyedActorsMap?: (levelToDestroyedActorsMap: Map<string, DestroyedActor[]>) => void;
 }
@@ -513,10 +513,10 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
       const pageCount = Math.ceil(objCount / objectPerPage);
 
       for (let i = 0; i < pageCount; i++) {
-        const objects: FGObject[] = [];
+        const objects: (FGObject | ReadFGObjectError)[] = [];
         const len = Math.min(objectPerPage, objCount - i * objectPerPage);
         for (let j = 0; j < len; j++) {
-          objects.push(levelDataGen.next().value as FGObject);
+          objects.push(levelDataGen.next().value as FGObject | ReadFGObjectError);
         }
         onObjectsPage(objects, i * objectPerPage, objCount);
       }
