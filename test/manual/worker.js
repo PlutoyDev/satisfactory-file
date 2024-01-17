@@ -16,7 +16,16 @@ onmessage = async event => {
     onPersistentLevel: {
       objectPerPage: 100,
       onObjectsPage: (objects, index, total) => {
-        console.log('onObjectsPage', { objects, index, total });
+        // find objects with extra data
+        for (const obj of objects) {
+          if ('extraData' in obj) {
+            console.warn(
+              `Object with class ${obj.className} has extra data}`,
+              obj
+            );
+          }
+        }
+        console.log('onObjectsPage', { index, total });
       },
     },
     onUnresolvedDestroyedActors: a =>
