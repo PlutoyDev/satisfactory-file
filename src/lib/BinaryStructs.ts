@@ -75,19 +75,15 @@ export function readFluidBox(reader: SequentialReader): FluidBox {
 export interface InventoryItem {
   itemClass: string;
   reference: ObjectReference;
-  numItems: number;
 }
 
 export function readInventoryItem(reader: SequentialReader): InventoryItem {
   reader.skip(4); // Unknown
   const itemClass = readFString(reader);
   const reference = readObjectReference(reader);
-  reader.skip(38); // Property Tag
-  const numItems = reader.readInt();
   return {
     itemClass,
     reference,
-    numItems,
   };
 }
 
