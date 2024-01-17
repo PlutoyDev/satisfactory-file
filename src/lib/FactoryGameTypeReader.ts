@@ -346,7 +346,6 @@ export function* readLevelObjectData(reader: SequentialReader) {
     dataReader.skip(4); // Skip unknown int
     const startOffset = dataReader.offset;
     const size = dataReader.readInt();
-    const expectedEnd = startOffset + size;
     try {
       if (object.type === 1) {
         object.parent = ur.readObjectReference(dataReader);
@@ -354,14 +353,16 @@ export function* readLevelObjectData(reader: SequentialReader) {
       }
       object.properties = readFProperties(dataReader);
 
+      //hasPropertyGuid is always present but not included in the size of the object.
+      object.hasPropertyGuid = dataReader.readInt() !== 0;
+      const expectedEnd = startOffset + size + 4;
+
       if (dataReader.offset < expectedEnd) {
         const diff = expectedEnd - dataReader.offset;
         object.extraData = dataReader.slice(diff);
       } else if (dataReader.offset > expectedEnd) {
         throw new Error(`Expected to read ${size} bytes, but read ${dataReader.offset - startOffset} bytes`);
       }
-
-      object.hasPropertyGuid = dataReader.readInt() !== 0;
 
       yield object;
       objects.push(object as FGObject);
