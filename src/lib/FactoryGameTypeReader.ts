@@ -195,7 +195,7 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   return typeReader;
 }
 
-class FPropertyReadError extends Error {
+export class FPropertyReadError extends Error {
   constructor(
     public tag: ur.FPropertyTag,
     public data: ArrayBuffer,
@@ -295,7 +295,7 @@ type FGObject = (
   extraData?: ArrayBuffer; // Extra data after the object, if any
 };
 
-class ReadFGObjectError extends Error {
+export class ReadFGObjectError extends Error {
   constructor(
     public object: FGObject,
     public data: ArrayBuffer,
