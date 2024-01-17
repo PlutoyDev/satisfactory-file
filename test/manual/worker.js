@@ -1,6 +1,7 @@
 /// <reference no-default-lib="true"/>
 /// <reference lib="webworker" />
 /// <reference lib="esnext" />
+
 import { readSave } from 'satisfactory-save-reader';
 
 // Read the save file
