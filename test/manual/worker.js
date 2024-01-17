@@ -19,5 +19,7 @@ onmessage = async event => {
         console.log('onObjectsPage', { objects, index, total });
       },
     },
+    onUnresolvedDestroyedActors: a =>
+      console.log('onUnresolvedDestroyedActors', a),
   });
 };
