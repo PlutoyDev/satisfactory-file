@@ -461,7 +461,26 @@ export interface ReadSaveCallback {
   onUnresolvedDestroyedActors?: (unresolvedDestroyedActors: DestroyedActor[]) => void;
 }
 
-export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: ReadSaveCallback = {}) {
+export interface FullSaveData {
+  header: Header;
+  validationGrids: ValidationGrids;
+  perLevelStreamingLevelDataMap: Map<string, PerLevelStreamingLevelSaveData>;
+  persistentLevel: PersistentAndRuntimeSaveData;
+  unresolvedDestroyedActors: DestroyedActor[];
+}
+
+/**
+ * Main entry point to read a save file.
+ *
+ * Allow source to be either ArrayBuffer or ReadableStream which can be transfer into web worker. See [Transferable Objects](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects).
+ * @param {ArrayBuffer | ReadableStream} source The save file to read
+ * @param  {ReadSaveCallback} callbacks Callbacks to be called when reading the save
+ * @returns {Promise<FullSaveData>} The save data in Javascript Object
+ */
+export async function readSave(
+  source: ArrayBuffer | ReadableStream,
+  callbacks: ReadSaveCallback = {},
+): Promise<FullSaveData> {
   let data: ArrayBuffer;
   if (source instanceof ReadableStream) {
     const reader = source.getReader();
@@ -501,6 +520,7 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
     const perLevelStreamingLevelDataMap = readPerLevelStreamingLevelDataMap(reader);
     callbacks.onPerLevelStreamingLevelDataMap?.(perLevelStreamingLevelDataMap);
 
+    let persistentAndRuntimeData: PersistentAndRuntimeSaveData;
     if (typeof callbacks.onPersistentLevel === 'object') {
       const {
         objectPerPage = 100,
@@ -512,32 +532,40 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
       const levelDataGen = readLevelObjectData(reader);
       const objCount = levelDataGen.next().value as number;
       const pageCount = Math.ceil(objCount / objectPerPage);
-
+      const objects: (FGObject | ReadFGObjectError)[] = [];
       for (let i = 0; i < pageCount; i++) {
-        const objects: (FGObject | ReadFGObjectError)[] = [];
+        const objectPage: (FGObject | ReadFGObjectError)[] = [];
         const len = Math.min(objectPerPage, objCount - i * objectPerPage);
         for (let j = 0; j < len; j++) {
-          objects.push(levelDataGen.next().value as FGObject | ReadFGObjectError);
+          const obj = levelDataGen.next().value as FGObject | ReadFGObjectError;
+          objectPage.push(obj);
+          objects.push(obj);
         }
-        onObjectsPage(objects, i * objectPerPage, objCount);
+        onObjectsPage(objectPage, i * objectPerPage, objCount);
       }
+
+      persistentAndRuntimeData = {
+        objects,
+      };
 
       const { done: hasTocDestroyedActors, value: tocDestroyedActors } = levelDataGen.next() as {
         done: boolean;
         value: DestroyedActor[] | undefined;
       };
 
-      if (hasTocDestroyedActors) {
-        // biome-ignore lint/style/noNonNullAssertion: not done, so value is not undefined
-        onTocDestroyedActors?.(tocDestroyedActors!);
+      if (hasTocDestroyedActors && tocDestroyedActors) {
+        onTocDestroyedActors?.(tocDestroyedActors);
+        persistentAndRuntimeData.tocDestroyedActors = tocDestroyedActors;
       }
       const levelToDestroyedActorsMap = ur.readTMap(reader, ur.readFString, (r) =>
         ur.readTArray(r, ur.readObjectReference),
       );
       onLevelToDestroyedActorsMap?.(levelToDestroyedActorsMap);
+      persistentAndRuntimeData.levelToDestroyedActorsMap = levelToDestroyedActorsMap;
     } else {
       const persistentLevel = readPersistentAndRuntimeData(reader);
       callbacks.onPersistentLevel?.(persistentLevel);
+      persistentAndRuntimeData = persistentLevel;
     }
 
     const unresolvedDestroyedActors = readUnresolvedDestroyedActor(reader);
@@ -551,6 +579,7 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
       header,
       validationGrids,
       perLevelStreamingLevelDataMap,
+      persistentLevel: persistentAndRuntimeData,
       unresolvedDestroyedActors,
     };
   } catch (e) {
@@ -558,3 +587,5 @@ export async function readSave(source: ArrayBuffer | ReadableStream, callbacks: 
     throw e;
   }
 }
+
+export default readSave;
