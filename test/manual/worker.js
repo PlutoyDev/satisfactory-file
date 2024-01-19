@@ -11,8 +11,16 @@ onmessage = async event => {
   await readSave(stream, {
     onHeader: h => console.log('onHeader', h),
     onValidationGrids: g => console.log('onValidationGrids', g),
-    onPerLevelStreamingLevelDataMap: m =>
-      console.log('onPerLevelStreamingLevelDataMap', m),
+    onPerLevelStreamingLevelDataMap: m => {
+      let totalObjectCount = 0;
+      for (const [, { objects }] of m) {
+        totalObjectCount += objects.length;
+      }
+      console.log('onPerLevelStreamingLevelDataMap', {
+        totalObjectCount,
+        levels: m.size,
+      });
+    },
     onPersistentLevel: {
       objectPerPage: 100,
       onObjectsPage: (objects, index, total) => {
