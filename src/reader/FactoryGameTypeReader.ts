@@ -292,6 +292,7 @@ type FGObject = (
   version: number;
   properties: ReturnType<typeof readFProperties>;
   hasPropertyGuid: boolean; // (default is false)
+  propertyGuid?: ur.FGuid; // (only if hasPropertyGuid is true)
   extraData?: ArrayBuffer; // Extra data after the object, if any
 };
 
@@ -355,7 +356,11 @@ export function* readLevelObjectData(reader: SequentialReader) {
 
       //hasPropertyGuid is always present but not included in the size of the object.
       object.hasPropertyGuid = dataReader.readInt() !== 0;
-      const expectedEnd = startOffset + size + 4;
+      if (object.hasPropertyGuid) {
+        object.propertyGuid = ur.readFGuid(dataReader);
+      }
+
+      const expectedEnd = startOffset + size + 4 + (object.hasPropertyGuid ? 16 : 0);
 
       if (dataReader.offset < expectedEnd) {
         const diff = expectedEnd - dataReader.offset;
