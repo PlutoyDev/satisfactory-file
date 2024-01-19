@@ -90,6 +90,21 @@ export function readInventoryItem(reader: SequentialReader): InventoryItem {
   };
 }
 
+export interface ConveyorBeltItem {
+  inventoryItem: InventoryItem;
+  /** The offset of this item along the conveyor belt in range [0,LENGTH] */
+  offset: number;
+}
+
+export function readConveyorBeltItem(reader: SequentialReader): ConveyorBeltItem {
+  const inventoryItem = readInventoryItem(reader);
+  const offset = reader.readFloat();
+  return {
+    inventoryItem,
+    offset,
+  };
+}
+
 export interface IntVector {
   x: number;
   y: number;
