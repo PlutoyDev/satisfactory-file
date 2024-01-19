@@ -78,7 +78,10 @@ export interface InventoryItem {
 }
 
 export function readInventoryItem(reader: SequentialReader): InventoryItem {
-  reader.skip(4); // Unknown
+  const unknownInt = reader.readInt();
+  if (unknownInt !== 0) {
+    console.warn(`Unknown int ${unknownInt} in InventoryItem`);
+  }
   const itemClass = readFString(reader);
   const reference = readObjectReference(reader);
   return {

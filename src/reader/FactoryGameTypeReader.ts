@@ -231,7 +231,12 @@ export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag) {
   try {
     let count: number | undefined = undefined;
     if (tag.type === 'Array' || tag.type === 'Set' || tag.type === 'Map') {
-      if (tag.type === 'Set' || tag.type === 'Map') reader.skip(4); // Skip unknown (Set has 1 extra int in front of count, that is 0)
+      if (tag.type === 'Set' || tag.type === 'Map') {
+        const unknown = reader.readInt(); //(Set/Map has 1 extra int in front of count, that is 0)
+        if (unknown !== 0) {
+          console.warn(`Set/Map unknown int is ${unknown} instead of 0`);
+        }
+      }
       count = reader.readInt();
     }
 
@@ -344,7 +349,10 @@ export function* readLevelObjectData(reader: SequentialReader) {
     const object: Partial<FGObject> = readFGObjectSaveHeader(tocReader);
 
     object.version = dataReader.readInt();
-    dataReader.skip(4); // Skip unknown int
+    const unknownInt = dataReader.readInt();
+    if (unknownInt !== 0) {
+      console.warn(`Unknown int ${unknownInt} in FGObject`);
+    }
     const startOffset = dataReader.offset;
     const size = dataReader.readInt();
     try {
