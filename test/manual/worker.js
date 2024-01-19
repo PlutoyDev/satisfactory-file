@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 /// <reference lib="esnext" />
 
-import { readSave } from 'satisfactory-save-reader';
+import { readSave } from 'satisfactory-file/reader';
 
 // Read the save file
 onmessage = async event => {
