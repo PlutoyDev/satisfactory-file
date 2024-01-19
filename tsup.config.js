@@ -6,7 +6,7 @@ export default {
     'src/writer/index.ts',
   ],
   dts: true,
-  minify: false,
+  minify: true,
   format: ['cjs', 'esm', 'iife'],
   platform: 'neutral',
   sourcemap: true,
