@@ -1,20 +1,17 @@
 {
-  "name": "satisfactory-save-reader",
+  "name": "satisfactory-file",
   "version": "0.0.1",
   "description": "",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
   "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+    "./reader": {
+      "import": "./dist/reader/index.mjs",
+      "require": "./dist/reader/index.js",
+      "types": "./dist/reader/index.d.ts"
     },
-    "./utils/browser": {
-      "import": "./dist/utils/browser.mjs",
-      "require": "./dist/utils/browser.js",
-      "types": "./dist/utils/browser.d.ts"
+    "./reader/utils/browser": {
+      "import": "./dist/reader/utils/browser.mjs",
+      "require": "./dist/reader/utils/browser.js",
+      "types": "./dist/reader/utils/browser.d.ts"
     }
   },
   "scripts": {

@@ -1,5 +1,5 @@
-import { type Header, readHeader } from '@lib/FactoryGameTypeReader';
-import SequentialReader from '@lib/SequentialReader';
+import { type Header, readHeader } from 'reader/FactoryGameTypeReader';
+import SequentialReader from 'reader/SequentialReader';
 
 /**
  * Peak at file header without reading the entire file using File readable stream.
