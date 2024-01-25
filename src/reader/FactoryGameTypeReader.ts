@@ -604,3 +604,4 @@ export async function readSave(
 }
 
 export default readSave;
+export type { ObjectReference, FTransform3f, FGuid } from './UnrealTypeReaders';
