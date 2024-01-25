@@ -184,7 +184,10 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
   }
 
   if (tag.type === 'Map' && tag.valueType) {
-    const keyReader = getTypeReader(reader, { ...tag, valueType: undefined }) as (r: SequentialReader) => unknown;
+    const keyReader = getTypeReader(reader, {
+      ...tag,
+      valueType: undefined,
+    }) as (r: SequentialReader) => unknown;
     return (r: SequentialReader) => {
       const key = keyReader(r);
       const value = typeReader?.(r);
@@ -263,7 +266,9 @@ export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag) {
 }
 
 export function readFProperties(reader: SequentialReader) {
-  const properties: Record<string, unknown> & { $errors?: Record<string, FPropertyReadError> } = {};
+  const properties: Record<string, unknown> & {
+    $errors?: Record<string, FPropertyReadError>;
+  } = {};
   while (true) {
     try {
       const tag = ur.readFPropertyTag(reader);
@@ -287,7 +292,7 @@ export function readFProperties(reader: SequentialReader) {
   return properties;
 }
 
-type FGObject = (
+export type FGObject = (
   | FObjectSaveHeader
   | (FActorSaveHeader & {
       parent: ur.ObjectReference;
