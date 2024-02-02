@@ -269,13 +269,15 @@ export function readFProperty(reader: SequentialReader, tag: FPropertyTag) {
 export function readFProperties(reader: SequentialReader) {
   const properties: Record<string, unknown> & {
     $errors?: Record<string, FPropertyReadError>;
-  } = {};
+    $tags: FPropertyTag[];
+  } = { $tags: [] };
   while (true) {
     try {
       const tag = ur.readFPropertyTag(reader);
       if (tag === null) {
         break;
       }
+      properties.$tags.push(tag);
 
       const value = readFProperty(reader, tag);
       properties[tag.name] = value;
