@@ -96,6 +96,27 @@ export class SequentialReader {
   skip(length: number): void {
     this.offset += length;
   }
+
+  readAscii(length: number): string {
+    const value = new TextDecoder().decode(this.slice(length));
+    return value;
+  }
+
+  readUtf16(length: number): string {
+    const size = length * 2;
+    const uint8Arr = new Uint8Array(this.slice(size));
+    let value = '';
+    for (let i = 0; i < length; i++) {
+      const a = uint8Arr[i * 2];
+      const b = uint8Arr[i * 2 + 1];
+      if (a === undefined || b === undefined) {
+        throw new Error('Invalid UTF-16 string');
+      }
+      const code = this.littleEndian ? a + (b << 8) : (a << 8) + b;
+      value += String.fromCodePoint(code);
+    }
+    return value;
+  }
 }
 
 export default SequentialReader;

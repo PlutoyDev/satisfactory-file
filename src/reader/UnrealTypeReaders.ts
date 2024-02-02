@@ -19,15 +19,11 @@ export function readFString(reader: SequentialReader): string {
 
   if (length > 0) {
     // ASCII
-    const data = reader.slice(length);
-    const decoder = new TextDecoder('ascii');
-    return decoder.decode(data).slice(0, -1);
+    return reader.readAscii(length).slice(0, -1);
   }
 
   // UTF-16
-  const data = reader.slice(-length * 2);
-  const decoder = new TextDecoder('utf-16');
-  return decoder.decode(data).slice(0, -1);
+  return reader.readUtf16(-length).slice(0, -1);
 }
 
 export function readTArray<T>(reader: SequentialReader, readElement: (reader: SequentialReader) => T): T[] {

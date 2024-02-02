@@ -106,4 +106,26 @@ export class SequentialWriter {
     this.ensureSpace(length);
     this.offset += length;
   }
+
+  writeAscii(value: string) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(value);
+    this.writeBytes(data);
+  }
+
+  writeUtf16(value: string) {
+    const size = value.length * 2;
+    const uint8Arr = new Uint8Array(size);
+    for (let i = 0; i < value.length; i++) {
+      const a = value.charCodeAt(i) & 0xff;
+      const b = (value.charCodeAt(i) >> 8) & 0xff;
+      if (this.littleEndian) {
+        uint8Arr[i * 2] = a;
+        uint8Arr[i * 2 + 1] = b;
+      } else {
+        uint8Arr[i * 2] = b;
+        uint8Arr[i * 2 + 1] = a;
+      }
+    }
+  }
 }
