@@ -1,6 +1,7 @@
 import SequentialReader from './SequentialReader';
 import * as ur from './UnrealTypeReaders';
 import * as bsr from './BinaryStructs';
+import type { FPropertyTag, ObjectReference, FTransform3f, FMD5Hash, FGuid } from 'types/UnrealTypes';
 
 export interface Header {
   saveHeaderVersion: number;
@@ -17,7 +18,7 @@ export interface Header {
   isModdedSave: boolean;
   saveIdentifier: string;
   isPartitionedWorld: boolean;
-  saveDataHash: ur.FMD5Hash;
+  saveDataHash: FMD5Hash;
   isCreativeModeEnabled: boolean;
 }
 
@@ -84,12 +85,12 @@ export function readValidationGrids(reader: SequentialReader): ValidationGrids {
   });
 }
 
-export type DestroyedActor = ur.ObjectReference;
+export type DestroyedActor = ObjectReference;
 export interface FObjectBase {
   /** 0: Object, 1: Actor */
   type: 0 | 1;
   className: string;
-  reference: ur.ObjectReference;
+  reference: ObjectReference;
 }
 
 export interface FObjectSaveHeader extends FObjectBase {
@@ -100,7 +101,7 @@ export interface FObjectSaveHeader extends FObjectBase {
 export interface FActorSaveHeader extends FObjectBase {
   type: 1;
   needTransform: boolean;
-  transform: ur.FTransform3f;
+  transform: FTransform3f;
   wasPlacedInLevel: boolean;
 }
 
@@ -146,7 +147,7 @@ const readerMap = {
   // biome-ignore lint/suspicious/noExplicitAny: doesn't matter
 } satisfies Record<string, (r: SequentialReader) => any>;
 
-export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
+export function getTypeReader(reader: SequentialReader, tag: FPropertyTag) {
   const valueType = tag.valueType ?? tag.innerType ?? tag.type; // valueType for Map, innerType is only for Array, Set
   let typeReader: ((r: SequentialReader) => unknown) | undefined = undefined;
   if (Object.keys(readerMap).includes(valueType)) {
@@ -155,7 +156,7 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
     // Not sure why the type is Byte but the value is stored as String
     typeReader = !tag.enumName || tag.enumName === 'None' ? readerMap.Int8 : ur.readFString;
   } else if (valueType === 'Struct') {
-    let innerTag: ur.FPropertyTag | undefined = undefined;
+    let innerTag: FPropertyTag | undefined = undefined;
     let structName: string | undefined = tag.structName;
     if (tag.type === 'Array' || tag.type === 'Set') {
       // biome-ignore lint/style/noNonNullAssertion: Will have inner tag for Array and Set, for StructName
@@ -200,7 +201,7 @@ export function getTypeReader(reader: SequentialReader, tag: ur.FPropertyTag) {
 
 export class FPropertyReadError extends Error {
   constructor(
-    public tag: ur.FPropertyTag,
+    public tag: FPropertyTag,
     public data: ArrayBuffer,
     public error: unknown,
   ) {
@@ -221,7 +222,7 @@ export class FPropertyReadError extends Error {
   }
 }
 
-export function readFProperty(reader: SequentialReader, tag: ur.FPropertyTag) {
+export function readFProperty(reader: SequentialReader, tag: FPropertyTag) {
   if (tag === null) {
     return null;
   }
@@ -295,14 +296,14 @@ export function readFProperties(reader: SequentialReader) {
 export type FGObject = (
   | FObjectSaveHeader
   | (FActorSaveHeader & {
-      parent: ur.ObjectReference;
-      children: ur.ObjectReference[];
+      parent: ObjectReference;
+      children: ObjectReference[];
     })
 ) & {
   version: number;
   properties: ReturnType<typeof readFProperties>;
   hasPropertyGuid: boolean; // (default is false)
-  propertyGuid?: ur.FGuid; // (only if hasPropertyGuid is true)
+  propertyGuid?: FGuid; // (only if hasPropertyGuid is true)
   extraData?: ArrayBuffer; // Extra data after the object, if any
 };
 
@@ -604,4 +605,3 @@ export async function readSave(
 }
 
 export default readSave;
-export type { ObjectReference, FTransform3f, FGuid } from './UnrealTypeReaders';

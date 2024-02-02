@@ -1,5 +1,6 @@
 // Exports functions to read Unreal types from a SequentialReader.
 
+import type { FPropertyTag, ObjectReference, FTransform3f, FMD5Hash, FGuid } from 'types/UnrealTypes';
 import SequentialReader from './SequentialReader';
 import { unzlibSync } from 'fflate';
 
@@ -50,25 +51,13 @@ export function readTMap<K, V>(
   return result;
 }
 
-export interface ObjectReference {
-  level: string;
-  path: string;
-}
-
 export function readObjectReference(reader: SequentialReader): ObjectReference {
   const level = readFString(reader);
   const path = readFString(reader);
   return { level, path };
 }
 
-export interface FGuid {
-  a: number;
-  b: number;
-  c: number;
-  d: number;
-}
-
-export function readFGuid(reader: SequentialReader) {
+export function readFGuid(reader: SequentialReader): FGuid {
   const a = reader.readUint();
   const b = reader.readUint();
   const c = reader.readUint();
@@ -76,12 +65,7 @@ export function readFGuid(reader: SequentialReader) {
   return { a, b, c, d };
 }
 
-export interface FMD5Hash {
-  IsValid: boolean;
-  hash: ArrayBuffer;
-}
-
-export function readFMD5Hash(reader: SequentialReader) {
+export function readFMD5Hash(reader: SequentialReader): FMD5Hash {
   const IsValid = reader.readInt() !== 0;
   const hash = reader.slice(16);
   return { IsValid, hash };
@@ -150,22 +134,6 @@ export function inflateChunks(reader: SequentialReader) {
   return data;
 }
 
-export interface FPropertyTag {
-  name: string; // Name/Key of property
-  type: string; // Type of property (Removed "Property" suffix)
-  size: number; // Property size (default is 0)
-  arrayIndex: number; // Index if an array (default is 0)
-  boolValue?: boolean; // a boolean property's value (default is false)
-  structName?: string; // Struct name if StructProperty.
-  enumName?: string; // Enum name if ByteProperty or EnumProperty
-  innerType?: string; // Inner type if ArrayProperty, SetProperty, or MapProperty (Remove "Property" suffix)
-  valueType?: string; // Value type if MapPropery
-  sizeOffset?: number; // location in stream of tag size member ?? (default is 0)
-  structGuid?: FGuid;
-  hasPropertyGuid: boolean; // (default is false)
-  propertyGuid?: FGuid;
-}
-
 export function readFPropertyTag(reader: SequentialReader) {
   const name = readFString(reader);
 
@@ -200,25 +168,6 @@ export function readFPropertyTag(reader: SequentialReader) {
   }
 
   return tag as FPropertyTag;
-}
-
-export interface FTransform3f {
-  rotation: {
-    x: number;
-    y: number;
-    z: number;
-    w: number;
-  };
-  position: {
-    x: number;
-    y: number;
-    z: number;
-  };
-  scale: {
-    x: number;
-    y: number;
-    z: number;
-  };
 }
 
 export function readFTransform3f(reader: SequentialReader): FTransform3f {
