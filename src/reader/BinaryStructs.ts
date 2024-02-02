@@ -1,5 +1,6 @@
 import type { SequentialReader } from './SequentialReader';
-import { readFString, readObjectReference, type ObjectReference, readFPropertyTag } from './UnrealTypeReaders';
+import type { ObjectReference } from '../types/UnrealTypes';
+import { readFString, readObjectReference } from './UnrealTypeReaders';
 
 // Binary Structs
 export interface Vector {
