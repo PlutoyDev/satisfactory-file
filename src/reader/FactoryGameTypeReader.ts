@@ -1,26 +1,21 @@
 import SequentialReader from './SequentialReader';
 import * as ur from './UnrealTypeReaders';
 import * as bsr from './BinaryStructsReader';
-import type { FPropertyTag, ObjectReference, FTransform3f, FMD5Hash, FGuid } from 'types/UnrealTypes';
-
-export interface Header {
-  saveHeaderVersion: number;
-  saveVersion: number;
-  buildVersion: number;
-  mapName: string;
-  mapOptions: string;
-  sessionName: string;
-  playDurationSeconds: number;
-  saveDateTime: Date;
-  sessionVisibility: number;
-  editorObjectVersion: number;
-  modMetadata: string;
-  isModdedSave: boolean;
-  saveIdentifier: string;
-  isPartitionedWorld: boolean;
-  saveDataHash: FMD5Hash;
-  isCreativeModeEnabled: boolean;
-}
+import type { FPropertyTag } from 'types/UnrealTypes';
+import {
+  Header,
+  DestroyedActor,
+  FActorSaveHeader,
+  FGObject,
+  FObjectSaveHeader,
+  FPropertyReadError,
+  FullSaveData,
+  PerLevelStreamingLevelSaveData,
+  PersistentAndRuntimeSaveData,
+  ReadFGObjectError,
+  ValidationGrids,
+  ObjectProperties,
+} from 'types/FactoryGameType';
 
 export function readHeader(reader: SequentialReader): Header {
   const saveHeaderVersion = reader.readInt();
@@ -68,14 +63,6 @@ export function readHeader(reader: SequentialReader): Header {
   };
 }
 
-export interface ValidationGrid {
-  cellSize: number;
-  gridHash: number;
-  cellHash: Map<string, number>;
-}
-
-export type ValidationGrids = Map<string, ValidationGrid>;
-
 export function readValidationGrids(reader: SequentialReader): ValidationGrids {
   return ur.readTMap(reader, ur.readFString, (reader) => {
     const cellSize = reader.readInt();
@@ -83,26 +70,6 @@ export function readValidationGrids(reader: SequentialReader): ValidationGrids {
     const cellHash = ur.readTMap(reader, ur.readFString, (r) => r.readUint());
     return { cellSize, gridHash, cellHash };
   });
-}
-
-export type DestroyedActor = ObjectReference;
-export interface FObjectBase {
-  /** 0: Object, 1: Actor */
-  type: 0 | 1;
-  className: string;
-  reference: ObjectReference;
-}
-
-export interface FObjectSaveHeader extends FObjectBase {
-  type: 0;
-  outerPathName: string;
-}
-
-export interface FActorSaveHeader extends FObjectBase {
-  type: 1;
-  needTransform: boolean;
-  transform: FTransform3f;
-  wasPlacedInLevel: boolean;
 }
 
 export function readFGObjectSaveHeader(reader: SequentialReader): FObjectSaveHeader | FActorSaveHeader {
@@ -199,29 +166,6 @@ export function getTypeReader(reader: SequentialReader, tag: FPropertyTag) {
   return typeReader;
 }
 
-export class FPropertyReadError extends Error {
-  constructor(
-    public tag: FPropertyTag,
-    public data: ArrayBuffer,
-    public error: unknown,
-  ) {
-    super(
-      `Reading property ${tag.name} resulted in error: ${
-        error && typeof error === 'object' && 'message' in error ? error.message : error
-      }`,
-    );
-  }
-
-  toJSON() {
-    return {
-      message: this.message,
-      tag: this.tag,
-      dataBase64: btoa(String.fromCharCode(...new Uint8Array(this.data))),
-      error: this.error,
-    };
-  }
-}
-
 export function readFProperty(reader: SequentialReader, tag: FPropertyTag) {
   if (tag === null) {
     return null;
@@ -267,10 +211,7 @@ export function readFProperty(reader: SequentialReader, tag: FPropertyTag) {
 }
 
 export function readFProperties(reader: SequentialReader) {
-  const properties: Record<string, unknown> & {
-    $errors?: Record<string, FPropertyReadError>;
-    $tags: FPropertyTag[];
-  } = { $tags: [] };
+  const properties: ObjectProperties = { $tags: [] };
   while (true) {
     try {
       const tag = ur.readFPropertyTag(reader);
@@ -293,45 +234,6 @@ export function readFProperties(reader: SequentialReader) {
     }
   }
   return properties;
-}
-
-export type FGObject = (
-  | FObjectSaveHeader
-  | (FActorSaveHeader & {
-      parent: ObjectReference;
-      children: ObjectReference[];
-    })
-) & {
-  version: number;
-  properties: ReturnType<typeof readFProperties>;
-  hasPropertyGuid: boolean; // (default is false)
-  propertyGuid?: FGuid; // (only if hasPropertyGuid is true)
-  extraData?: ArrayBuffer; // Extra data after the object, if any
-};
-
-export class ReadFGObjectError extends Error {
-  constructor(
-    public object: FGObject,
-    public data: ArrayBuffer,
-    public objectIndex: number,
-    public error: unknown,
-  ) {
-    super(
-      `Reading object ${object.className} resulted in error: ${
-        error && typeof error === 'object' && 'message' in error ? error.message : error
-      }`,
-    );
-  }
-
-  toJSON() {
-    return {
-      message: this.message,
-      object: this.object,
-      objectIndex: this.objectIndex,
-      dataBase64: btoa(String.fromCharCode(...new Uint8Array(this.data))),
-      error: this.error,
-    };
-  }
 }
 
 export function* readLevelObjectData(reader: SequentialReader) {
@@ -406,12 +308,6 @@ export function* readLevelObjectData(reader: SequentialReader) {
   }
 }
 
-export interface PerLevelStreamingLevelSaveData {
-  objects: (FGObject | ReadFGObjectError)[];
-  tocDestroyedActors?: DestroyedActor[];
-  destroyedActors?: DestroyedActor[];
-}
-
 export function readPerLevelStreamingLevelDataMap(
   reader: SequentialReader,
 ): Map<string, PerLevelStreamingLevelSaveData> {
@@ -433,12 +329,6 @@ export function readPerLevelStreamingLevelDataMap(
       throw e;
     }
   });
-}
-
-export interface PersistentAndRuntimeSaveData {
-  objects: (FGObject | ReadFGObjectError)[];
-  tocDestroyedActors?: DestroyedActor[];
-  levelToDestroyedActorsMap?: Map<string, DestroyedActor[]>;
 }
 
 export function readPersistentAndRuntimeData(reader: SequentialReader): PersistentAndRuntimeSaveData {
@@ -477,14 +367,6 @@ export interface ReadSaveCallback {
   ) => void;
   onPersistentLevel?: ((persistentLevel: PersistentAndRuntimeSaveData) => void) | FinnerPersistentLevelCallback;
   onUnresolvedDestroyedActors?: (unresolvedDestroyedActors: DestroyedActor[]) => void;
-}
-
-export interface FullSaveData {
-  header: Header;
-  validationGrids: ValidationGrids;
-  perLevelStreamingLevelDataMap: Map<string, PerLevelStreamingLevelSaveData>;
-  persistentLevel: PersistentAndRuntimeSaveData;
-  unresolvedDestroyedActors: DestroyedActor[];
 }
 
 /**
