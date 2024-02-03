@@ -1,6 +1,6 @@
 import SequentialReader from './SequentialReader';
 import * as ur from './UnrealTypeReaders';
-import * as bsr from './BinaryStructs';
+import * as bsr from './BinaryStructsReader';
 import type { FPropertyTag, ObjectReference, FTransform3f, FMD5Hash, FGuid } from 'types/UnrealTypes';
 
 export interface Header {
