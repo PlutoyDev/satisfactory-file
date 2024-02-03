@@ -27,6 +27,11 @@ export interface ValidationGrid {
 
 export type ValidationGrids = Map<string, ValidationGrid>;
 
+export type FPropertyTagExtended = FPropertyTag & {
+  innerTag?: FPropertyTag | null;
+  valueTag?: FPropertyTag | null;
+};
+
 export type DestroyedActor = ObjectReference;
 export interface FObjectBase {
   /** 0: Object, 1: Actor */
