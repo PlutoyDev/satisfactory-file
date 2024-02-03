@@ -129,3 +129,5 @@ export class SequentialWriter {
     }
   }
 }
+
+export default SequentialWriter;

@@ -1,5 +1,5 @@
-import { ObjectReference, FGuid, FMD5Hash, FPropertyTag, FTransform3f } from 'types/UnrealTypes';
-import { SequentialWriter } from './SequentialWriter';
+import SequentialWriter from './SequentialWriter';
+import type { ObjectReference, FGuid, FMD5Hash, FPropertyTag, FTransform3f } from 'types/UnrealTypes';
 import { zlibSync } from 'fflate';
 
 export function writeFDateTime(writer: SequentialWriter, value: Date) {
